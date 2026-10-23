@@ -74,6 +74,7 @@ type model struct {
 	sessions map[string]trail.Session
 	order    []string
 	children map[string][]string
+	folded   map[string]bool
 
 	sessionCursor int
 	sessionTop    int
@@ -113,6 +114,7 @@ type model struct {
 
 	statsScreen statsScreen
 	filesScreen filesScreen
+	help        helpScreen
 
 	claudeLimits    limits.Claude
 	hasClaudeLimits bool
@@ -149,6 +151,7 @@ func newModel(follower *trail.Trail, history trail.Batch, context Context) model
 		follower:        follower,
 		context:         context,
 		sessions:        map[string]trail.Session{},
+		folded:          map[string]bool{},
 		follow:          true,
 		showUsage:       true,
 		hideNoise:       true,
@@ -360,6 +363,13 @@ func (m model) familyLast(key string) time.Time {
 }
 
 func (m model) expanded(key string) bool {
+	if folded, chosen := m.folded[key]; chosen {
+		return !folded
+	}
+	return m.autoExpanded(key)
+}
+
+func (m model) autoExpanded(key string) bool {
 	return key == m.activeSession || key == m.sessions[m.activeSession].Parent || m.familyRunning(key)
 }
 
@@ -450,6 +460,8 @@ func (m *model) key(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return m.searchKey(msg), false
 	case m.confirmDelete != "":
 		return m.confirmKey(msg.String()), false
+	case m.help.shown:
+		return nil, m.helpKey(msg.String())
 	case m.statsScreen.shown:
 		return m.statsKey(msg.String())
 	case m.filesScreen.shown:
@@ -462,6 +474,8 @@ func (m *model) key(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return nil, true
+	case "?":
+		m.help.shown = true
 	case "t":
 		return m.statsScreen.open(m.context), false
 	case "d":
@@ -619,7 +633,42 @@ func (m *model) sessionsKey(key string) {
 		m.selectSession(len(m.order))
 	case "enter", "right", "l":
 		m.focus = eventsPane
+	case "space":
+		m.toggleFold()
 	}
+}
+
+func (m *model) toggleFold() {
+	key := m.sessionKeyAt(m.sessionCursor)
+	if key == "" {
+		m.toggleEveryFold()
+		return
+	}
+	if m.isChild(m.sessions[key]) {
+		key = m.sessions[key].Parent
+	}
+	if len(m.children[key]) == 0 {
+		return
+	}
+	m.folded[key] = m.expanded(key)
+	m.reorderSessions()
+	m.selectSession(m.rowOf(key))
+}
+
+func (m *model) toggleEveryFold() {
+	foldAll := slices.ContainsFunc(m.parentsWithAgents(), m.expanded)
+	for _, key := range m.parentsWithAgents() {
+		m.folded[key] = foldAll
+	}
+	m.reorderSessions()
+}
+
+func (m model) parentsWithAgents() []string {
+	keys := make([]string, 0, len(m.children))
+	for key := range m.children {
+		keys = append(keys, key)
+	}
+	return keys
 }
 
 func (m *model) eventsKey(key string) {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -42,8 +43,12 @@ const (
 	unpricedCost         = "—"
 	costColumnWidth      = 8
 	hintSeparator        = "  "
+	keysHint             = "? keys"
 	middleBranch         = "├ "
 	lastBranch           = "└ "
+	foldedMark           = "▸ "
+	unfoldedMark         = "▾ "
+	noFoldMark           = "  "
 	minimumWidth         = 20
 	minimumHeight        = 8
 	tooSmallMessage      = "terminal too small"
@@ -137,6 +142,9 @@ func (m model) render() string {
 	}
 	if m.statsScreen.shown {
 		return m.renderStats()
+	}
+	if m.help.shown {
+		return m.renderHelp()
 	}
 	if m.filesScreen.shown {
 		return m.renderFiles()
@@ -326,9 +334,19 @@ func (m model) sessionLabelRow(row int, key string) string {
 	session := m.sessions[key]
 	name := m.sessionQuery.highlight(sessionLabel(session), matchStyle)
 	if !m.isChild(session) {
-		return marker(key == m.activeSession) + glyphStyle(session).Render(stateGlyph(session)) + cliStyle(session.CLI).Render(m.cliIcon(session.CLI)) + name + m.projectHint(session) + m.branchHint(session)
+		return marker(key == m.activeSession) + faintStyle.Render(m.foldMark(key)) + glyphStyle(session).Render(stateGlyph(session)) + cliStyle(session.CLI).Render(m.cliIcon(session.CLI)) + name + m.projectHint(session) + m.branchHint(session)
 	}
 	return marker(key == m.activeSession) + faintStyle.Render(m.branchGlyph(row)) + glyphStyle(session).Render(stateGlyph(session)) + cliStyle(session.CLI).Render(m.icon(agentIcon)) + name + faintStyle.Render(" · "+session.Agent)
+}
+
+func (m model) foldMark(key string) string {
+	switch {
+	case len(m.children[key]) == 0:
+		return noFoldMark
+	case m.expanded(key):
+		return unfoldedMark
+	}
+	return foldedMark
 }
 
 func (m model) branchGlyph(row int) string {
@@ -529,7 +547,7 @@ func (m model) footer() string {
 		prefix = promptStyle.Render("filter: "+text+" (esc clears)") + hintSeparator
 	}
 	room := m.width - ansi.StringWidth("agent-trail "+m.context.Version) - 1 - ansi.StringWidth(prefix)
-	return prefix + faintStyle.Render(fitHints(append(m.paneHints(), m.globalHints()...), room))
+	return prefix + faintStyle.Render(fitHints(slices.Concat([]string{keysHint}, m.paneHints(), m.globalHints()), room))
 }
 
 func fitHints(hints []string, room int) string {
@@ -542,7 +560,7 @@ func fitHints(hints []string, room int) string {
 func (m model) paneHints() []string {
 	switch m.focus {
 	case sessionsPane:
-		return []string{"↑↓ pick", "enter events", "c continue", "y summary", "d files", "x delete", "o running only", "m " + shownOrHidden(!m.hideAutomated) + " automated", "/ filter", "a all"}
+		return []string{"↑↓ pick", "enter events", "c continue", "y summary", "d files", "space fold", "x delete", "o running only", "m " + shownOrHidden(!m.hideAutomated) + " automated", "/ filter", "a all"}
 	case eventsPane:
 		return []string{"↑↓ move", "enter detail", "s event's session", "y summary", "d files", "a all", "n " + shownOrHidden(!m.hideNoise) + " noise", "u usage", "f follow", "/ filter"}
 	}

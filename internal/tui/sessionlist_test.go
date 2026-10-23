@@ -150,7 +150,7 @@ func TestFooterListsOnlyTheFocusedPanesKeys(t *testing.T) {
 
 func TestNarrowFooterDropsWholeHintsFromTheRight(t *testing.T) {
 	full := listModel(260, runningClaude("waiter", "idle", time.Now()))
-	hints := append(full.paneHints(), full.globalHints()...)
+	hints := append([]string{keysHint}, append(full.paneHints(), full.globalHints()...)...)
 	for width := 40; width <= 120; width++ {
 		footer := footerOf(listModel(width, runningClaude("waiter", "idle", time.Now())))
 		left := strings.TrimRight(strings.TrimSuffix(footer, "agent-trail "+testVersion), " ")
