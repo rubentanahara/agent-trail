@@ -38,6 +38,15 @@ func (q query) matches(haystack string) bool {
 	return true
 }
 
+func (q query) matchesExactly(haystack string) bool {
+	for _, t := range q {
+		if strings.Contains(haystack, t.text) == t.negate {
+			return false
+		}
+	}
+	return true
+}
+
 func isSubsequence(haystack, needle string) bool {
 	remaining := []rune(needle)
 	for _, r := range haystack {

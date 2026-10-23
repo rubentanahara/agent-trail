@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -11,9 +12,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rubentanahara/agent-trail/internal/pricing"
 	"github.com/rubentanahara/agent-trail/internal/trail"
 	"github.com/rubentanahara/agent-trail/internal/tui"
 )
+
+var version = "dev"
 
 const (
 	defaultReplayDays = 2.0
@@ -22,10 +26,13 @@ const (
 )
 
 type options struct {
-	once bool
-	all  bool
-	days float64
-	repo string
+	once    bool
+	all     bool
+	days    float64
+	repo    string
+	offline bool
+	prices  bool
+	version bool
 }
 
 func main() {
@@ -47,7 +54,7 @@ func parseOptions(args []string, output io.Writer) (options, error) {
 	flags := flag.NewFlagSet("agent-trail", flag.ContinueOnError)
 	flags.SetOutput(output)
 	flags.Usage = func() {
-		fmt.Fprintln(output, "Usage: agent-trail [--once] [--days N | --all] [--repo PATH]")
+		fmt.Fprintln(output, "Usage: agent-trail [--once] [--days N | --all] [--repo PATH] [--offline] [--prices] [--version]")
 		fmt.Fprintln(output, "Live, filterable log of what Claude Code, Codex and Copilot CLI do in a git repository.")
 		flags.PrintDefaults()
 	}
@@ -55,6 +62,9 @@ func parseOptions(args []string, output io.Writer) (options, error) {
 	flags.BoolVar(&opts.all, "all", false, "replay the whole history")
 	flags.Float64Var(&opts.days, "days", defaultReplayDays, "days of history to replay")
 	flags.StringVar(&opts.repo, "repo", "", "repository to follow (default: the git repository of the current directory)")
+	flags.BoolVar(&opts.offline, "offline", false, "do not download the price list; use the cached copy if there is one")
+	flags.BoolVar(&opts.prices, "prices", false, "print the price of every model used in the replayed history and exit")
+	flags.BoolVar(&opts.version, "version", false, "print the version and exit")
 	if err := flags.Parse(args); err != nil {
 		return opts, err
 	}
@@ -76,6 +86,10 @@ func isFlagSet(flags *flag.FlagSet, name string) bool {
 }
 
 func run(opts options) error {
+	if opts.version {
+		fmt.Println("agent-trail", version)
+		return nil
+	}
 	repo, err := repository(opts.repo)
 	if err != nil {
 		return err
@@ -88,12 +102,53 @@ func run(opts options) error {
 	if !opts.all {
 		cutoff = time.Now().Add(-time.Duration(opts.days * hoursPerDay * float64(time.Hour)))
 	}
-	follower := trail.New(home, repo)
+	prices, status := pricing.Load(context.Background(), pricing.DefaultOptions(opts.offline))
+	follower := trail.New(home, repo, prices)
 	history := follower.Start(cutoff)
+	if opts.prices {
+		return printPrices(os.Stdout, prices, status, history.Events)
+	}
+	if status.Warning != "" && (opts.once || !isTerminal(os.Stdout)) {
+		fmt.Fprintln(os.Stderr, "agent-trail:", status.Warning)
+	}
 	if opts.once || !isTerminal(os.Stdout) {
 		return printHistory(os.Stdout, history.Events)
 	}
-	return tui.Run(follower, history, repo)
+	return tui.Run(follower, history, tui.Context{Repo: repo, PricesAsOf: prices.FetchedAt, PriceWarning: status.Warning})
+}
+
+func printPrices(out io.Writer, prices pricing.Table, status pricing.Status, events []trail.Event) error {
+	fmt.Fprintf(out, "price list: %s (fetched %s)\n", status.Source, prices.FetchedAt)
+	if status.Override != "" {
+		fmt.Fprintf(out, "overrides:  %s\n", status.Override)
+	}
+	if status.Warning != "" {
+		fmt.Fprintf(out, "warning:    %s\n", status.Warning)
+	}
+	fmt.Fprintf(out, "\n%-32s %-9s %10s %10s %10s %10s %10s\n", "model (USD per million tokens)", "source", "input", "output", "cache read", "write 5m", "write 1h")
+	seen := map[string]bool{}
+	for _, event := range events {
+		if event.Usage == nil || seen[event.Usage.Model] {
+			continue
+		}
+		seen[event.Usage.Model] = true
+		price, ok := prices.Lookup(event.Usage.Model)
+		if !ok {
+			fmt.Fprintf(out, "%-32s %-9s %s\n", event.Usage.Model, "-", "no price, costs not shown")
+			continue
+		}
+		base := price.Base
+		fmt.Fprintf(out, "%-32s %-9s %10s %10s %10s %10s %10s\n", event.Usage.Model, price.Source,
+			perMillion(base.Input), perMillion(base.Output), perMillion(base.CacheRead), perMillion(base.CacheWrite5m), perMillion(base.CacheWrite1h))
+	}
+	return nil
+}
+
+func perMillion(rate *float64) string {
+	if rate == nil {
+		return "-"
+	}
+	return fmt.Sprintf("%.4g", *rate*1_000_000)
 }
 
 func repository(override string) (string, error) {

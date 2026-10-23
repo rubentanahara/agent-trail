@@ -22,6 +22,7 @@ var copilotHandledTypes = map[string]bool{
 	"session.start": true, "session.shutdown": true, "session.error": true, "session.info": true,
 	"session.model_change": true, "session.usage_record": true, "session.usage_checkpoint": true,
 	"subagent.selected": true, "subagent.started": true, "subagent.completed": true, "subagent.failed": true,
+	"assistant.turn_start": true, "assistant.turn_end": true,
 }
 
 type copilotRecord struct {
@@ -131,6 +132,12 @@ func copilotUpdateSession(eventType string, data copilotData, session *Session) 
 		session.Agent = firstNonEmpty(data.AgentDisplayName, data.AgentName)
 	case "subagent.started":
 		session.addSubagent(firstNonEmpty(data.AgentDisplayName, data.AgentName))
+	case "assistant.turn_start":
+		session.TurnOpen = true
+	case "assistant.turn_end", "abort":
+		session.TurnOpen = false
+	case "session.shutdown":
+		session.TurnOpen = false
 	}
 	if data.PremiumRequests != nil {
 		session.PremiumRequests = *data.PremiumRequests
@@ -162,7 +169,7 @@ func copilotEvents(eventType string, data copilotData) []Event {
 	event := Event{Kind: kind, Text: text}
 	if eventType == "session.usage_record" && data.Usage != nil {
 		usage := copilotUsageOf(*data.Usage)
-		event.Usage, event.Text = &usage, usage.Line()
+		event.Usage = &usage
 	}
 	return []Event{event}
 }

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -114,8 +115,13 @@ func (p *codexParser) parse(raw []byte, session *Session) ([]Event, error) {
 	var envelope struct {
 		Type string `json:"type"`
 	}
-	if record.Type == "event_msg" && (json.Unmarshal(record.Payload, &envelope) != nil || !codexHandledEvent(envelope.Type)) {
-		return nil, nil
+	if record.Type == "event_msg" {
+		if err := json.Unmarshal(record.Payload, &envelope); err != nil {
+			return nil, err
+		}
+		if !codexHandledEvent(envelope.Type) {
+			return nil, nil
+		}
 	}
 	var payload codexPayload
 	if len(record.Payload) > 0 {
@@ -150,9 +156,19 @@ func (p *codexParser) updateSession(recordType string, payload codexPayload, ses
 		session.Model = payload.Model
 		session.Permission = strings.Trim(payload.ApprovalPolicy+" / "+codexSandbox(payload.SandboxPolicy), " /")
 	case "event_msg":
+		codexTurnUpdate(payload.Type, session)
 		if payload.Type == "token_count" {
 			codexLimitsUpdate(payload, session)
 		}
+	}
+}
+
+func codexTurnUpdate(eventType string, session *Session) {
+	switch {
+	case eventType == "task_started":
+		session.TurnOpen = true
+	case eventType == "task_complete" || strings.Contains(eventType, "aborted"):
+		session.TurnOpen = false
 	}
 }
 
@@ -213,7 +229,7 @@ func (p *codexParser) usageEvents(payload codexPayload) []Event {
 		Output:     tokens.OutputTokens,
 		Reasoning:  tokens.ReasoningTokens,
 	}
-	return []Event{{Kind: KindUsage, Text: usage.Line(), Usage: &usage}}
+	return []Event{{Kind: KindUsage, Usage: &usage}}
 }
 
 func codexEventMessage(payload codexPayload, rawPayload json.RawMessage) []Event {
@@ -310,7 +326,7 @@ func codexCandidates(home string) []string {
 	root := filepath.Join(home, ".codex", "sessions")
 	_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			return fs.SkipDir
 		}
 		if matched, _ := filepath.Match(codexRolloutPattern, entry.Name()); matched && !entry.IsDir() {
 			files = append(files, path)

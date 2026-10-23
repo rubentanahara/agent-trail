@@ -30,11 +30,13 @@ const (
 	ellipsis         = "…"
 	activeMarker     = "▶ "
 	inactiveMarker   = "  "
-	sessionDot       = "● "
+	runningGlyph     = "● "
+	closedGlyph      = "○ "
+	unknownGlyph     = "◌ "
 	minimumWidth     = 20
 	minimumHeight    = 8
 	tooSmallMessage  = "terminal too small"
-	unknownCostLabel = "?"
+	unknownCostLabel = "not recorded"
 )
 
 var (
@@ -44,6 +46,7 @@ var (
 	failedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 	faintStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	apiStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("203"))
+	runningStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 	selectedStyle = lipgloss.NewStyle().Reverse(true)
 	titleStyle    = lipgloss.NewStyle().Bold(true)
 	labelStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
@@ -111,8 +114,8 @@ func (m model) render() string {
 	body := right
 	if g.showLeft {
 		left := stack(
-			box(fmt.Sprintf("Sessions (%d)", len(m.order)), m.sessionRows(g.leftW-2, g.sessionsH-borderAndTitle-1), g.leftW, g.sessionsH, m.focus == sessionsPane),
-			box(m.infoTitle(), m.infoRows(g.leftW-2), g.leftW, g.infoH, false),
+			box(m.sessionsTitle(), m.sessionRows(g.leftW-2, g.sessionsH-borderAndTitle-1), g.leftW, g.sessionsH, m.focus == sessionsPane),
+			box(m.infoTitle(), m.infoRows(), g.leftW, g.infoH, false),
 		)
 		body = lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 	}
@@ -161,16 +164,57 @@ func cliStyle(cli trail.CLI) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(cliColours[cli]))
 }
 
+func (m model) sessionsTitle() string {
+	title := fmt.Sprintf("Sessions (%d)", len(m.order)) + filterBadge(m.filterText[sessionsPane], "filter")
+	if m.focus == sessionsPane {
+		title += faintStyle.Render(" ↑↓ pick · enter open")
+	}
+	return title
+}
+
 func (m model) eventsTitle() string {
-	scope := "all sessions"
+	scope, state := "all sessions", fmt.Sprintf("%d running", m.runningCount())
 	if session, ok := m.sessions[m.activeSession]; ok {
-		scope = sessionLabel(session)
+		scope, state = sessionLabel(session), scopeState(session)
 	}
-	follow := ""
-	if m.follow {
-		follow = " · following"
+	scroll := " · auto-scroll"
+	if !m.follow {
+		scroll = " · paused (f resumes)"
 	}
-	return fmt.Sprintf("Events: %s (%d)%s", scope, len(m.visible), follow)
+	return fmt.Sprintf("Events: %s (%d) · %s%s", scope, len(m.visible), state, scroll) + filterBadge(m.filterText[eventsPane], "filter")
+}
+
+func (m model) runningCount() int {
+	running := 0
+	for _, key := range m.order {
+		if m.sessions[key].Liveness == trail.LivenessRunning {
+			running++
+		}
+	}
+	return running
+}
+
+func scopeState(session trail.Session) string {
+	switch session.Liveness {
+	case trail.LivenessRunning:
+		return runningStyle.Render(runningGlyph + "running" + optional(" · ", session.Activity))
+	case trail.LivenessClosed:
+		return closedGlyph + "closed, no new events expected"
+	}
+	return unknownGlyph + "last event " + age(session.Last) + " ago" + optional(" · ", session.Activity)
+}
+
+func age(at time.Time) string {
+	elapsed := time.Since(at)
+	switch {
+	case elapsed < time.Minute:
+		return fmt.Sprintf("%ds", max(0, int(elapsed.Seconds())))
+	case elapsed < time.Hour:
+		return fmt.Sprintf("%dm", int(elapsed.Minutes()))
+	case elapsed < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(elapsed.Hours()))
+	}
+	return fmt.Sprintf("%dd", int(elapsed.Hours()/24))
 }
 
 func (m model) eventRows(width, rows int) []string {
@@ -213,8 +257,8 @@ func (m model) sessionRows(width, rows int) []string {
 	lines := []string{spread(all, fmt.Sprintf("%d ev", len(m.events)), width)}
 	for _, key := range m.order {
 		session := m.sessions[key]
-		label := marker(key == m.activeSession) + cliStyle(session.CLI).Render(sessionDot) + sessionLabel(session)
-		lines = append(lines, spread(label, sessionMetric(session), width))
+		label := marker(key == m.activeSession) + cliStyle(session.CLI).Render(stateGlyph(session)) + sessionLabel(session)
+		lines = append(lines, spread(label, faintStyle.Render(fmt.Sprintf("%4s ", age(session.Last)))+sessionMetric(session), width))
 	}
 	out := make([]string, 0, rows)
 	for row := m.sessionTop; row < len(lines) && len(out) < rows; row++ {
@@ -256,32 +300,45 @@ func shortID(id string) string {
 	return id
 }
 
-func sessionMetric(session trail.Session) string {
-	switch session.CLI {
-	case trail.Claude:
-		if session.PricedCalls == 0 {
-			return trail.Tokens(session.Tokens.Output) + " out"
-		}
-		if session.Billing == trail.BillingAPI {
-			return apiStyle.Render(trail.Dollars(session.Tokens.CostUSD) + " API")
-		}
-		return "~" + trail.Dollars(session.Tokens.CostUSD)
-	case trail.Codex:
-		if session.Billing == trail.BillingAPI {
-			return apiStyle.Render("API " + trail.Tokens(session.Tokens.Output))
-		}
-		if session.HasRateLimit {
-			return fmt.Sprintf("%.0f%% lim", session.RateLimitPercent)
-		}
-	case trail.Copilot:
-		if session.Billing == trail.BillingAPI {
-			return apiStyle.Render("BYOK")
-		}
-		if session.PremiumRequests > 0 {
-			return fmt.Sprintf("%g req", session.PremiumRequests)
-		}
+func stateGlyph(session trail.Session) string {
+	switch session.Liveness {
+	case trail.LivenessRunning:
+		return runningGlyph
+	case trail.LivenessClosed:
+		return closedGlyph
 	}
-	return trail.Tokens(session.Tokens.Output) + " out"
+	return unknownGlyph
+}
+
+func sessionMetric(session trail.Session) string {
+	if session.CLI == trail.Copilot && session.Billing != trail.BillingAPI && session.PremiumRequests > 0 {
+		return fmt.Sprintf("%g req", session.PremiumRequests)
+	}
+	if session.PricedCalls == 0 {
+		return trail.Tokens(session.Tokens.Output) + " out"
+	}
+	if session.Billing == trail.BillingAPI {
+		return apiStyle.Render(trail.Dollars(session.Tokens.CostUSD) + " API")
+	}
+	return "~" + trail.Dollars(session.Tokens.CostUSD)
+}
+
+func stateLine(session trail.Session) string {
+	activity := optional(" · ", session.Activity)
+	switch session.Liveness {
+	case trail.LivenessRunning:
+		return runningStyle.Render("running"+activity) + optional(" · pid ", pidText(session.PID))
+	case trail.LivenessClosed:
+		return "closed"
+	}
+	return "open or closed not recorded by " + string(session.CLI) + activity
+}
+
+func pidText(pid int) string {
+	if pid <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d", pid)
 }
 
 func (m model) infoTitle() string {
@@ -291,13 +348,14 @@ func (m model) infoTitle() string {
 	return "Totals"
 }
 
-func (m model) infoRows(width int) []string {
+func (m model) infoRows() []string {
 	session, ok := m.sessions[m.sessionKeyAt(m.sessionCursor)]
 	if !ok {
 		return m.totalRows()
 	}
 	rows := []string{
 		field("Name", sessionLabel(session)),
+		field("State", stateLine(session)),
 		field("CLI", string(session.CLI)+optional(" · agent ", session.Agent)),
 		field("Subagents", strings.Join(session.Subagents, ", ")),
 		field("Model", session.Model),
@@ -307,6 +365,7 @@ func (m model) infoRows(width int) []string {
 		field("Active", activeSpan(session)),
 		field("Tokens", tokenLine(session.Tokens)),
 		field("Cost", costLine(session)),
+		field("Reported", reportedLine(session)),
 		field("Limits", limitsLine(session)),
 		field("Lines", linesLine(session)),
 		field("Events", fmt.Sprintf("%d · %d model calls", session.Events, session.Calls)),
@@ -333,15 +392,43 @@ func (m model) totalRows() []string {
 		}
 	}
 	return nonEmpty([]string{
-		field("Repo", m.repo),
+		field("Repo", m.context.Repo),
+		field("Running", fmt.Sprintf("%d sessions", m.runningCount())),
 		field("Sessions", fmt.Sprintf("claude %d · codex %d · copilot %d", perCLI[trail.Claude], perCLI[trail.Codex], perCLI[trail.Copilot])),
 		field("Tokens", tokenLine(tokens)),
 		field("API billed", nonZeroDollars(apiCost)),
 		field("Subscription", nonZeroDollars(equivalentCost)+optional("", ifPositive(equivalentCost, " API-equivalent"))),
 		field("Copilot", ifPositive(premium, fmt.Sprintf("%g premium requests", premium))),
 		field("Events", fmt.Sprintf("%d", len(m.events))),
-		field("Prices", faintStyle.Render("Claude API list "+trail.ClaudePricesAsOf)),
+		field("Prices", m.pricesLine()),
+		field("Legend", strings.TrimSpace(runningGlyph+"running "+closedGlyph+"closed "+unknownGlyph+"not recorded")),
 	})
+}
+
+func firstNonEmptyText(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func (m model) pricesLine() string {
+	if m.context.PriceWarning != "" {
+		return failedStyle.Render(m.context.PriceWarning)
+	}
+	if m.context.PricesAsOf == "" {
+		return failedStyle.Render("none loaded, costs not shown")
+	}
+	return faintStyle.Render("LiteLLM list, " + m.context.PricesAsOf)
+}
+
+func reportedLine(session trail.Session) string {
+	if !session.HasReportedCost {
+		return ""
+	}
+	return trail.Dollars(session.ReportedCostUSD) + " by Claude Code"
 }
 
 func field(label, value string) string {
@@ -393,7 +480,8 @@ func activeSpan(session trail.Session) string {
 	if session.Start.IsZero() {
 		return ""
 	}
-	return fmt.Sprintf("%s → %s (%s)", session.Start.Local().Format("01-02 15:04"), session.Last.Local().Format("15:04"), session.Last.Sub(session.Start).Round(time.Minute))
+	span := strings.TrimSuffix(session.Last.Sub(session.Start).Round(time.Minute).String(), "0s")
+	return fmt.Sprintf("%s → %s (%s)", session.Start.Local().Format("01-02 15:04"), session.Last.Local().Format("15:04"), firstNonEmptyText(span, "<1m"))
 }
 
 func tokenLine(u trail.Usage) string {
@@ -447,10 +535,18 @@ func linesLine(session trail.Session) string {
 }
 
 func (m model) detailTitle() string {
+	title := "Detail (r: raw JSON)"
 	if m.raw {
-		return "Detail · raw JSON (r: text)"
+		title = "Detail · raw JSON (r: text)"
 	}
-	return "Detail (r: raw JSON)"
+	return title + filterBadge(m.filterText[detailPane], "matching lines")
+}
+
+func filterBadge(text, what string) string {
+	if text == "" {
+		return ""
+	}
+	return promptStyle.Render(" · " + what + ": " + text)
 }
 
 func (m *model) refreshDetail() {
@@ -468,23 +564,46 @@ func (m model) detailContent() string {
 		return faintStyle.Render("no event selected")
 	}
 	if m.raw {
-		return m.detailData.Raw
+		return m.matchingLines(colorJSON(m.detailData.Raw))
 	}
 	event := m.events[m.detailShown]
 	header := fmt.Sprintf("%s · %s · %s", event.Time.Local().Format(time.DateTime), cliStyle(event.CLI).Render(event.Who()), event.Kind)
 	if session, ok := m.sessions[event.Session]; ok {
 		header += "\n" + faintStyle.Render("session "+sessionLabel(session)+" ("+session.ID+")")
 	}
-	return header + "\n\n" + m.detailData.Text
+	return header + "\n\n" + m.matchingLines(m.detailData.Text)
+}
+
+func (m model) matchingLines(text string) string {
+	if len(m.detailQuery) == 0 {
+		return text
+	}
+	var kept []string
+	for _, line := range strings.Split(text, "\n") {
+		if m.detailQuery.matchesExactly(strings.ToLower(ansi.Strip(line))) {
+			kept = append(kept, line)
+		}
+	}
+	if len(kept) == 0 {
+		return faintStyle.Render("no line matches")
+	}
+	return strings.Join(kept, "\n")
+}
+
+func shownOrHidden(shown bool) string {
+	if shown {
+		return "hide"
+	}
+	return "show"
 }
 
 func (m model) footer() string {
 	if m.searching {
 		return m.search.View()
 	}
-	status := []string{"tab pane", "/ filter", "enter open", "s event's session", "a all", "u usage", "r raw", "f follow", "q quit"}
-	if query := m.search.Value(); query != "" {
-		status = append([]string{promptStyle.Render("filter: " + query + " (esc clears)")}, status...)
+	status := faintStyle.Render(strings.Join([]string{"1 2 3/tab panes", "/ filter pane", "enter open", "s event's session", "a all", "n " + shownOrHidden(!m.hideNoise) + " noise", "u usage", "r raw", "f follow", "q quit"}, "  "))
+	if text := m.filterText[m.focus]; text != "" {
+		status = promptStyle.Render("filter: "+text+" (esc clears)") + "  " + status
 	}
-	return faintStyle.Render(strings.Join(status, "  "))
+	return status
 }

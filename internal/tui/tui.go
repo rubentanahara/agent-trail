@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -39,9 +40,15 @@ type detailMsg struct {
 	err    error
 }
 
+type Context struct {
+	Repo         string
+	PricesAsOf   string
+	PriceWarning string
+}
+
 type model struct {
 	follower *trail.Trail
-	repo     string
+	context  Context
 
 	events   []trail.Event
 	haystack []string
@@ -57,11 +64,16 @@ type model struct {
 	eventTop    int
 	follow      bool
 	showUsage   bool
+	hideNoise   bool
 
-	focus     pane
-	search    textinput.Model
-	searching bool
-	filter    query
+	focus        pane
+	search       textinput.Model
+	searching    bool
+	searchTarget pane
+	filterText   [paneCount]string
+	filter       query
+	sessionQuery query
+	detailQuery  query
 
 	detail          viewport.Model
 	detailRequested int
@@ -74,23 +86,26 @@ type model struct {
 	height int
 }
 
-func Run(follower *trail.Trail, history trail.Batch, repo string) error {
-	_, err := tea.NewProgram(newModel(follower, history, repo)).Run()
+var noiseKinds = map[trail.Kind]bool{trail.KindAttachment: true, trail.KindSystem: true}
+
+func Run(follower *trail.Trail, history trail.Batch, context Context) error {
+	_, err := tea.NewProgram(newModel(follower, history, context)).Run()
 	return err
 }
 
-func newModel(follower *trail.Trail, history trail.Batch, repo string) model {
+func newModel(follower *trail.Trail, history trail.Batch, context Context) model {
 	search := textinput.New()
 	search.Prompt = "/ "
-	search.Placeholder = "fuzzy filter: words must all match, 'exact, !exclude"
+	search.Placeholder = "words must all match · 'exact · !exclude · esc clears"
 	detail := viewport.New()
 	detail.SoftWrap = true
 	m := model{
 		follower:        follower,
-		repo:            repo,
+		context:         context,
 		sessions:        map[string]trail.Session{},
 		follow:          true,
 		showUsage:       true,
+		hideNoise:       true,
 		focus:           eventsPane,
 		search:          search,
 		detail:          detail,
@@ -195,6 +210,9 @@ func (m *model) reorderSessions() {
 			m.order = append(m.order, key)
 		}
 	}
+	m.order = slices.DeleteFunc(m.order, func(key string) bool {
+		return !m.sessionQuery.matches(sessionHaystack(m.sessions[key]))
+	})
 	sort.Slice(m.order, func(i, j int) bool {
 		return m.sessions[m.order[i]].Last.After(m.sessions[m.order[j]].Last)
 	})
@@ -223,6 +241,9 @@ func (m model) includes(index int) bool {
 		return false
 	}
 	if !m.showUsage && event.Kind == trail.KindUsage {
+		return false
+	}
+	if m.hideNoise && noiseKinds[event.Kind] {
 		return false
 	}
 	return m.filter.matches(m.haystack[index])
@@ -282,7 +303,9 @@ func (m *model) key(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	case "shift+tab":
 		m.focus = (m.focus + paneCount - 1) % paneCount
 	case "/":
-		m.searching = true
+		m.searching, m.searchTarget = true, m.focus
+		m.search.SetValue(m.filterText[m.focus])
+		m.search.CursorEnd()
 		return m.search.Focus(), false
 	case "esc":
 		m.escape()
@@ -293,6 +316,15 @@ func (m *model) key(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	case "u":
 		m.showUsage = !m.showUsage
 		m.refilter()
+	case "n":
+		m.hideNoise = !m.hideNoise
+		m.refilter()
+	case "1":
+		m.focus = sessionsPane
+	case "2":
+		m.focus = eventsPane
+	case "3":
+		m.focus = detailPane
 	case "r":
 		m.raw = !m.raw
 		m.refreshDetail()
@@ -310,15 +342,39 @@ func (m *model) key(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 
 func (m *model) escape() {
 	switch {
+	case m.filterText[m.focus] != "":
+		m.applyFilter(m.focus, "")
 	case m.focus == detailPane:
 		m.focus = eventsPane
-	case len(m.filter) > 0:
-		m.search.SetValue("")
-		m.filter = nil
-		m.refilter()
 	case m.activeSession != "":
 		m.selectSession(allSessionsRow)
 	}
+}
+
+func (m *model) applyFilter(target pane, text string) {
+	if m.filterText[target] == text {
+		return
+	}
+	m.filterText[target] = text
+	switch target {
+	case sessionsPane:
+		m.sessionQuery = parseQuery(text)
+		m.reorderSessions()
+	case eventsPane:
+		m.filter = parseQuery(text)
+		m.refilter()
+	case detailPane:
+		m.detailQuery = parseQuery(text)
+		m.refreshDetail()
+		m.detail.GotoTop()
+	}
+}
+
+func sessionHaystack(session trail.Session) string {
+	return strings.ToLower(strings.Join([]string{
+		string(session.CLI), session.Name, session.ID, session.Model, session.Agent, strings.Join(session.Subagents, " "),
+		session.Branch, string(session.Liveness), session.Activity, string(session.Billing), session.Plan,
+	}, " "))
 }
 
 func (m *model) searchKey(msg tea.KeyPressMsg) tea.Cmd {
@@ -334,23 +390,8 @@ func (m *model) searchKey(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	var cmd tea.Cmd
 	m.search, cmd = m.search.Update(msg)
-	if parsed := parseQuery(m.search.Value()); !equalQuery(parsed, m.filter) {
-		m.filter = parsed
-		m.refilter()
-	}
+	m.applyFilter(m.searchTarget, m.search.Value())
 	return cmd
-}
-
-func equalQuery(a, b query) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func (m *model) jumpToEventSession() {

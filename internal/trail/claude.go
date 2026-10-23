@@ -52,6 +52,7 @@ type claudeEntry struct {
 	AgentName      string             `json:"agentName"`
 	Params         *claudeRequestBody `json:"params"`
 	LinesAdded     int                `json:"totalLinesAdded"`
+	TotalCostUSD   *float64           `json:"totalCostUSD"`
 	LinesRemoved   int                `json:"totalLinesRemoved"`
 }
 
@@ -151,7 +152,7 @@ func (p *claudeParser) parse(raw []byte, session *Session) ([]Event, error) {
 	if err := json.Unmarshal(raw, &entry); err != nil {
 		return nil, err
 	}
-	p.updateSession(entry, session, raw)
+	p.updateSession(entry, session)
 	at, ok := parseTime(entry.Timestamp)
 	if !ok {
 		return nil, nil
@@ -166,7 +167,7 @@ func (p *claudeParser) parse(raw []byte, session *Session) ([]Event, error) {
 	return events, nil
 }
 
-func (p *claudeParser) updateSession(entry claudeEntry, session *Session, raw []byte) {
+func (p *claudeParser) updateSession(entry claudeEntry, session *Session) {
 	if p.agent != "" {
 		session.addSubagent(p.agent)
 	}
@@ -189,6 +190,9 @@ func (p *claudeParser) updateSession(entry claudeEntry, session *Session, raw []
 		session.Billing = claudeBilling(entry.Params)
 	case "cost-state":
 		session.LinesAdded, session.LinesRemoved = entry.LinesAdded, entry.LinesRemoved
+		if entry.TotalCostUSD != nil {
+			session.ReportedCostUSD, session.HasReportedCost = *entry.TotalCostUSD, true
+		}
 	}
 	if entry.Cwd != "" {
 		session.Cwd = entry.Cwd
@@ -313,31 +317,20 @@ func (p *claudeParser) usageEvent(entry claudeEntry) *Event {
 		p.seenMessages[id] = true
 	}
 	usage := claudeUsageOf(entry.Message.Model, entry.Message.Usage)
-	return &Event{Agent: p.who(entry), Kind: KindUsage, Text: usage.Line(), Usage: &usage}
+	return &Event{Agent: p.who(entry), Kind: KindUsage, Usage: &usage}
 }
 
 func claudeUsageOf(model string, raw *claudeUsage) Usage {
-	tokens := claudeTokens{
-		model:        model,
-		input:        raw.InputTokens,
-		output:       raw.OutputTokens,
-		cacheRead:    raw.CacheReadTokens,
-		cacheWrite5m: raw.CacheCreationTokens,
-		fast:         raw.Speed == claudeSpeedFast,
-	}
-	if raw.CacheCreation != nil {
-		tokens.cacheWrite5m = raw.CacheCreation.FiveMins
-		tokens.cacheWrite1h = raw.CacheCreation.OneHour
-	}
-	cost, priced := claudeCost(tokens)
 	usage := Usage{
-		Model:      normalizeClaudeModel(model),
+		Model:      model,
 		Input:      raw.InputTokens + raw.CacheReadTokens + raw.CacheCreationTokens,
 		CacheRead:  raw.CacheReadTokens,
 		CacheWrite: raw.CacheCreationTokens,
 		Output:     raw.OutputTokens,
-		CostUSD:    cost,
-		Priced:     priced,
+		Fast:       raw.Speed == claudeSpeedFast,
+	}
+	if raw.CacheCreation != nil {
+		usage.CacheWrite1h = raw.CacheCreation.OneHour
 	}
 	if raw.OutputDetails != nil {
 		usage.Reasoning = raw.OutputDetails.ThinkingTokens

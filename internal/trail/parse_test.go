@@ -1,7 +1,6 @@
 package trail
 
 import (
-	"math"
 	"strings"
 	"testing"
 )
@@ -100,23 +99,6 @@ func TestClaudeUsageIsCountedOncePerMessage(t *testing.T) {
 	second, _ := parseOne(t, p, assistantLine("msg_1", usage))
 	assertKinds(t, first, "claude assistant", "claude usage")
 	assertKinds(t, second, "claude assistant")
-}
-
-func TestClaudeCostMatchesClaudeCodeReportedTotal(t *testing.T) {
-	usage := `{"input_tokens":26,"output_tokens":8400,"cache_read_input_tokens":560692,"cache_creation_input_tokens":53595,"cache_creation":{"ephemeral_1h_input_tokens":53595,"ephemeral_5m_input_tokens":0}}`
-	events, _ := parseOne(t, newClaudeParser("a.jsonl"), assistantLine("msg_1", usage))
-	cost := events[len(events)-1].Usage.CostUSD
-	if math.Abs(cost-0.7090024) > 1e-9 {
-		t.Fatalf("cost = %v, want 0.7090024", cost)
-	}
-}
-
-func TestClaudeUnknownModelIsNotPriced(t *testing.T) {
-	line := strings.Replace(assistantLine("m", `{"input_tokens":1,"output_tokens":1}`), "claude-opus-5-5", "claude-future-9", 1)
-	events, _ := parseOne(t, newClaudeParser("a.jsonl"), line)
-	if events[len(events)-1].Usage.Priced {
-		t.Fatal("unknown model must not be priced")
-	}
 }
 
 func TestClaudeBillingComesFromOAuthBeta(t *testing.T) {

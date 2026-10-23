@@ -86,14 +86,14 @@ func visibleSummaries(m model) []string {
 }
 
 func TestSessionsAreOrderedByLatestActivity(t *testing.T) {
-	m := newModel(nil, sampleBatch(), "/repo")
+	m := newModel(nil, sampleBatch(), Context{Repo: "/repo"})
 	if strings.Join(m.order, ",") != "codex:b,claude:a" {
 		t.Fatalf("order = %v", m.order)
 	}
 }
 
 func TestMovingInSessionsPaneFiltersEventsToThatSession(t *testing.T) {
-	m := sized(newModel(nil, sampleBatch(), "/repo"), 120, 40)
+	m := sized(newModel(nil, sampleBatch(), Context{Repo: "/repo"}), 120, 40)
 	m = press(m, "tab", "tab", "down")
 	if got := strings.Join(visibleSummaries(m), ","); got != "write tests,FAILED exit 1" {
 		t.Fatalf("visible = %q", got)
@@ -105,7 +105,7 @@ func TestMovingInSessionsPaneFiltersEventsToThatSession(t *testing.T) {
 }
 
 func TestSearchFiltersAndEscapeClears(t *testing.T) {
-	m := sized(newModel(nil, sampleBatch(), "/repo"), 120, 40)
+	m := sized(newModel(nil, sampleBatch(), Context{Repo: "/repo"}), 120, 40)
 	m = press(m, "/", "'", "f", "a", "i", "l", "enter")
 	if got := strings.Join(visibleSummaries(m), ","); got != "FAILED exit 1" {
 		t.Fatalf("visible = %q", got)
@@ -117,7 +117,7 @@ func TestSearchFiltersAndEscapeClears(t *testing.T) {
 }
 
 func TestJumpToSelectedEventsSession(t *testing.T) {
-	m := sized(newModel(nil, sampleBatch(), "/repo"), 120, 40)
+	m := sized(newModel(nil, sampleBatch(), Context{Repo: "/repo"}), 120, 40)
 	m = press(m, "up", "up", "up", "s")
 	if m.activeSession != "claude:a" || len(m.visible) != 2 {
 		t.Fatalf("active = %q visible = %d", m.activeSession, len(m.visible))
@@ -125,7 +125,7 @@ func TestJumpToSelectedEventsSession(t *testing.T) {
 }
 
 func TestUsageRowsCanBeHidden(t *testing.T) {
-	m := press(sized(newModel(nil, sampleBatch(), "/repo"), 120, 40), "u")
+	m := press(sized(newModel(nil, sampleBatch(), Context{Repo: "/repo"}), 120, 40), "u")
 	for _, summary := range visibleSummaries(m) {
 		if strings.HasPrefix(summary, "claude-opus") {
 			t.Fatal("usage row still visible")
@@ -134,7 +134,7 @@ func TestUsageRowsCanBeHidden(t *testing.T) {
 }
 
 func TestNewEventsKeepFollowingTheNewest(t *testing.T) {
-	m := sized(newModel(nil, sampleBatch(), "/repo"), 120, 40)
+	m := sized(newModel(nil, sampleBatch(), Context{Repo: "/repo"}), 120, 40)
 	more := trail.Batch{Events: []trail.Event{{Time: time.Now(), CLI: trail.Copilot, Session: "copilot:c", Kind: trail.KindUser, Summary: "newest"}}}
 	updated, _ := m.Update(batchMsg{more})
 	m = updated.(model)
@@ -145,7 +145,7 @@ func TestNewEventsKeepFollowingTheNewest(t *testing.T) {
 
 func TestRenderFitsTheTerminalAtAnySize(t *testing.T) {
 	for _, size := range [][2]int{{0, 0}, {10, 5}, {20, 8}, {60, 20}, {69, 12}, {70, 12}, {200, 60}} {
-		m := sized(newModel(nil, sampleBatch(), "/repo"), size[0], size[1])
+		m := sized(newModel(nil, sampleBatch(), Context{Repo: "/repo"}), size[0], size[1])
 		lines := strings.Split(m.render(), "\n")
 		if size[0] >= minimumWidth && size[1] >= minimumHeight && len(lines) != size[1] {
 			t.Errorf("%v: %d lines, want %d", size, len(lines), size[1])
@@ -155,5 +155,48 @@ func TestRenderFitsTheTerminalAtAnySize(t *testing.T) {
 				t.Errorf("%v: line width %d exceeds terminal", size, width)
 			}
 		}
+	}
+}
+
+func TestSlashFiltersTheFocusedPane(t *testing.T) {
+	m := sized(newModel(nil, sampleBatch(), Context{Repo: "/repo"}), 120, 40)
+	m = press(m, "1", "/", "t", "e", "s", "t", "s", "enter")
+	if strings.Join(m.order, ",") != "codex:b" || len(m.visible) != 4 {
+		t.Fatalf("sessions = %v visible events = %d", m.order, len(m.visible))
+	}
+	m = press(m, "esc")
+	if len(m.order) != 2 {
+		t.Fatalf("after esc, sessions = %v", m.order)
+	}
+}
+
+func TestDetailFilterKeepsOnlyMatchingLines(t *testing.T) {
+	m := sized(newModel(nil, sampleBatch(), Context{Repo: "/repo"}), 120, 40)
+	m.detailShown, m.detailData = 0, trail.Detail{Text: "alpha line\nbeta line\nalpha again"}
+	m = press(m, "3", "/", "a", "l", "p", "h", "a", "enter")
+	content := ansi.Strip(m.detailContent())
+	if strings.Contains(content, "beta") || strings.Count(content, "alpha") != 2 {
+		t.Fatalf("content = %q", content)
+	}
+}
+
+func TestColorJSONKeepsTheTextIntact(t *testing.T) {
+	pretty := "{\n  \"key\": \"va\\\"lue\",\n  \"n\": -1.5e3,\n  \"ok\": true,\n  \"none\": null\n}"
+	if got := ansi.Strip(colorJSON(pretty)); got != pretty {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestEventsTitleShowsTheRealStateOfTheSelectedSession(t *testing.T) {
+	batch := sampleBatch()
+	batch.Sessions[0].Liveness = trail.LivenessClosed
+	batch.Sessions[1].Liveness = trail.LivenessRunning
+	m := sized(newModel(nil, batch, Context{Repo: "/repo"}), 160, 40)
+	if title := ansi.Strip(m.eventsTitle()); !strings.Contains(title, "1 running") {
+		t.Fatalf("all-sessions title = %q", title)
+	}
+	m = press(m, "1", "down", "down")
+	if title := ansi.Strip(m.eventsTitle()); !strings.Contains(title, "closed") || strings.Contains(title, "running") {
+		t.Fatalf("closed-session title = %q", title)
 	}
 }

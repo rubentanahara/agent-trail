@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/rubentanahara/agent-trail/internal/pricing"
 )
 
 type parser interface {
@@ -60,12 +62,14 @@ type Trail struct {
 	changed     map[string]bool
 	threadNames map[string]string
 	indexSize   int64
+	prices      pricing.Table
 }
 
-func New(home, repo string) *Trail {
+func New(home, repo string, prices pricing.Table) *Trail {
 	return &Trail{
 		home:        home,
 		repo:        repo,
+		prices:      prices,
 		sources:     sources(home, repo),
 		transcripts: map[string]*transcript{},
 		rejected:    map[string]bool{},
@@ -115,6 +119,7 @@ func (t *Trail) Poll() Batch {
 
 func (t *Trail) finish(events []Event) Batch {
 	t.refreshThreadNames()
+	t.refreshLiveness()
 	sort.SliceStable(events, func(i, j int) bool { return events[i].Time.Before(events[j].Time) })
 	batch := Batch{Events: events}
 	for key := range t.changed {
@@ -215,8 +220,13 @@ func (t *Trail) parseLine(line []byte, file *transcript, session *Session, at So
 		if events[i].Kind == KindUser && events[i].Agent == "" {
 			session.setFallbackName(events[i].Summary)
 		}
-		if events[i].Usage != nil {
-			session.addUsage(*events[i].Usage)
+		if usage := events[i].Usage; usage != nil {
+			usage.CostUSD, usage.Priced = t.prices.Cost(pricing.Tokens{
+				Model: usage.Model, Input: usage.Input, CacheRead: usage.CacheRead, CacheWrite: usage.CacheWrite,
+				CacheWrite1h: usage.CacheWrite1h, Output: usage.Output, Fast: usage.Fast,
+			})
+			events[i].Summary = Clip(usage.Line())
+			session.addUsage(*usage)
 		}
 	}
 	return events
@@ -290,14 +300,16 @@ func LoadDetail(event Event) (Detail, error) {
 		detail.Text = usageDetail(*event.Usage)
 		return detail, nil
 	}
-	fresh := parserFor(event.CLI, event.Source.Path)
-	events, err := fresh.parse(line, &Session{})
-	if err != nil || event.Source.Index >= len(events) {
-		detail.Text = event.Summary
-		return detail, nil
-	}
-	detail.Text = events[event.Source.Index].Text
+	detail.Text = fullText(event, line)
 	return detail, nil
+}
+
+func fullText(event Event, line []byte) string {
+	events, err := parserFor(event.CLI, event.Source.Path).parse(line, &Session{})
+	if err != nil || event.Source.Index >= len(events) {
+		return event.Summary
+	}
+	return events[event.Source.Index].Text
 }
 
 func parserFor(cli CLI, path string) parser {
@@ -332,9 +344,9 @@ func prettyJSON(line []byte) string {
 }
 
 func usageDetail(u Usage) string {
-	cost := "not priced"
+	cost := "not shown: no price for this model in the price list"
 	if u.Priced {
-		cost = fmt.Sprintf("%s at API list prices (%s)", Dollars(u.CostUSD), ClaudePricesAsOf)
+		cost = Dollars(u.CostUSD) + " at API list prices"
 	}
 	return fmt.Sprintf("model        %s\ninput        %d\n  cache read %d\n  cache write %d\noutput       %d\n  reasoning  %d\nduration     %s\ncost         %s",
 		u.Model, u.Input, u.CacheRead, u.CacheWrite, u.Output, u.Reasoning, u.Duration.Round(time.Millisecond), cost)

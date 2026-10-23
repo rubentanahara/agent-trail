@@ -62,16 +62,26 @@ func (e Event) Who() string {
 }
 
 type Usage struct {
-	Model      string
-	Input      int64
-	CacheRead  int64
-	CacheWrite int64
-	Output     int64
-	Reasoning  int64
-	CostUSD    float64
-	Priced     bool
-	Duration   time.Duration
+	Model        string
+	Input        int64
+	CacheRead    int64
+	CacheWrite   int64
+	CacheWrite1h int64
+	Output       int64
+	Reasoning    int64
+	Fast         bool
+	CostUSD      float64
+	Priced       bool
+	Duration     time.Duration
 }
+
+type Liveness string
+
+const (
+	LivenessUnknown Liveness = ""
+	LivenessRunning Liveness = "running"
+	LivenessClosed  Liveness = "closed"
+)
 
 type Billing string
 
@@ -104,6 +114,12 @@ type Session struct {
 	LinesRemoved int
 
 	PremiumRequests  float64
+	ReportedCostUSD  float64
+	HasReportedCost  bool
+	Liveness         Liveness
+	Activity         string
+	PID              int
+	TurnOpen         bool
 	RateLimitPercent float64
 	HasRateLimit     bool
 	ContextPercent   float64
