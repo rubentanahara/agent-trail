@@ -144,3 +144,18 @@ func TestBellAndDesktopNotificationBytes(t *testing.T) {
 		t.Errorf("inside tmux = %q, want %q", got, want)
 	}
 }
+
+func TestClosedCopilotSessionStopsWaiting(t *testing.T) {
+	copilot := trail.Session{Key: "copilot:c", ID: "c", CLI: trail.Copilot, Name: "cop", Events: 1, Last: startedAt, Liveness: trail.LivenessRunning, TurnOpen: true}
+	m := notifyModel(false, copilot)
+	copilot.TurnOpen = false
+	m.absorbPolled(trail.Batch{Sessions: []trail.Session{copilot}})
+	if keys := m.waitingKeys(); len(keys) != 1 {
+		t.Fatalf("after its turn ended: waiting = %v", keys)
+	}
+	copilot.Liveness = trail.LivenessClosed
+	m.absorbPolled(trail.Batch{Sessions: []trail.Session{copilot}})
+	if keys := m.waitingKeys(); len(keys) != 0 {
+		t.Fatalf("after it closed: waiting = %v", keys)
+	}
+}

@@ -63,8 +63,11 @@ func becameWaiting(previous, current trail.Session) bool {
 }
 
 func stillWaiting(session trail.Session) bool {
-	if session.CLI == trail.Claude {
+	switch session.CLI {
+	case trail.Claude:
 		return isWaiting(session)
+	case trail.Copilot:
+		return !session.TurnOpen && session.Liveness == trail.LivenessRunning
 	}
 	return !session.TurnOpen
 }
