@@ -168,6 +168,7 @@ With a subscription the cost is labelled `~$… API-equivalent`: what the same t
 - Downloaded on first run and cached in your user cache folder (`~/Library/Caches/agent-trail` on macOS, `~/.cache/agent-trail` on Linux).
 - Refreshed in the background once the cache is a day old. The download is a plain GET of that public file; nothing about your sessions is sent.
 - When a model is missing from the list, or the list lacks the rate for a kind of token the call used (for example cache writes), that call's cost is not shown. It is never guessed.
+- Claude Code context use is the last call's prompt size divided by the model's `max_input_tokens` in the list. It is not shown when the list has no limit for the model.
 - `--offline` uses the cached copy only. `--prices` prints the price used for each model in your history.
 
 To correct or add a price, create `~/.config/agent-trail/prices.json` in the same format. Its entries replace the list's:

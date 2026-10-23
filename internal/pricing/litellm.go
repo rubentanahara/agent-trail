@@ -71,7 +71,15 @@ func (e entry) price(source string) (Price, bool) {
 	if base.Input == nil && base.Output == nil {
 		return Price{}, false
 	}
-	return Price{Base: base, Tiers: e.tiers(), FastMultiplier: e.fastMultiplier(), Source: source}, true
+	return Price{Base: base, Tiers: e.tiers(), FastMultiplier: e.fastMultiplier(), MaxInputTokens: e.maxInputTokens(), Source: source}, true
+}
+
+func (e entry) maxInputTokens() int64 {
+	limit := e.number("max_input_tokens")
+	if limit == nil || *limit < 1 {
+		return 0
+	}
+	return int64(*limit)
 }
 
 func (e entry) tiers() []Tier {

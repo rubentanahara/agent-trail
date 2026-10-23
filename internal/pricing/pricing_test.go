@@ -8,7 +8,7 @@ import (
 const fixture = `{
   "claude-opus-5-5": {"litellm_provider": "anthropic", "input_cost_per_token": 4e-06, "output_cost_per_token": 2e-05,
     "cache_read_input_token_cost": 2e-07, "cache_creation_input_token_cost": 5e-06, "cache_creation_input_token_cost_above_1hr": 8e-06,
-    "provider_specific_entry": {"fast": 2}},
+    "max_input_tokens": 1000000, "provider_specific_entry": {"fast": 2}},
   "small-model": {"litellm_provider": "anthropic", "input_cost_per_token": 1e-07, "output_cost_per_token": 5e-07,
     "input_cost_per_token_above_100k_tokens": 5e-07, "output_cost_per_token_above_100k_tokens": 2.5e-06},
   "no-cache-model": {"litellm_provider": "openai", "input_cost_per_token": 1e-06, "output_cost_per_token": 2e-06},
@@ -69,5 +69,21 @@ func TestLookupNormalisesSuffixesAndDots(t *testing.T) {
 func TestThirdPartyProviderEntriesAreIgnored(t *testing.T) {
 	if _, ok := table(t).prices["azure/claude-opus-5-5"]; ok {
 		t.Fatal("azure entry must be ignored")
+	}
+}
+
+func TestContextLimitComesFromMaxInputTokensUnderTheSameNamesAsLookup(t *testing.T) {
+	for _, model := range []string{"claude-opus-5-5", "claude-opus-5-5-20260101", "claude-opus-5-5[1m]"} {
+		if limit, ok := table(t).ContextLimit(model); !ok || limit != 1_000_000 {
+			t.Fatalf("limit for %q = %d (found %v), want 1000000", model, limit, ok)
+		}
+	}
+}
+
+func TestContextLimitIsAbsentWhenTheEntryHasNoMaxInputTokens(t *testing.T) {
+	for _, model := range []string{"small-model", "never-heard-of-it"} {
+		if limit, ok := table(t).ContextLimit(model); ok {
+			t.Fatalf("limit for %q = %d, want none", model, limit)
+		}
 	}
 }

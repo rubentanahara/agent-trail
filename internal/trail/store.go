@@ -332,9 +332,22 @@ func (t *Trail) parseLine(line []byte, file *transcript, session *Session, at So
 			})
 			events[i].Summary = Clip(usage.Line())
 			session.addUsage(*usage)
+			t.updateClaudeContext(events[i].CLI, *usage, session)
 		}
 	}
 	return events
+}
+
+func (t *Trail) updateClaudeContext(cli CLI, usage Usage, session *Session) {
+	if cli != Claude {
+		return
+	}
+	limit, known := t.prices.ContextLimit(usage.Model)
+	if !known {
+		return
+	}
+	session.ContextPercent = percentScale * float64(usage.Input) / float64(limit)
+	session.HasContext = true
 }
 
 func unparsed(line []byte, cli CLI, cause error) []Event {

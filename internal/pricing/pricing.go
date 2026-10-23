@@ -22,6 +22,7 @@ type Price struct {
 	Base           Rates
 	Tiers          []Tier
 	FastMultiplier *float64
+	MaxInputTokens int64
 	Source         string
 }
 
@@ -52,6 +53,11 @@ func (t Table) Lookup(model string) (Price, bool) {
 		}
 	}
 	return Price{}, false
+}
+
+func (t Table) ContextLimit(model string) (int64, bool) {
+	price, ok := t.Lookup(model)
+	return price.MaxInputTokens, ok && price.MaxInputTokens > 0
 }
 
 func candidates(model string) []string {
