@@ -64,6 +64,27 @@ func TestChecksTabOpensTheSelectedCheckInTheBrowser(t *testing.T) {
 	}
 }
 
+func TestChecksTabListsRepoWideRunsAndOpensOne(t *testing.T) {
+	var opened string
+	m := openedPRs(t, newFakeGH(t))
+	m.pr.open = func(url string) error { opened = url; return nil }
+
+	m = pressPR(m, "]")
+	text := screenText(m)
+	for _, want := range []string{"Repository runs", "feat: ship", "nightly", "ci · push · main"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("checks tab lacks %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "scratch") {
+		t.Fatalf("a pull request run leaked in:\n%s", text)
+	}
+	pressPR(m, "2", "G", "o")
+	if opened != "https://github.com/o/r/actions/runs/3" {
+		t.Fatalf("opened %q", opened)
+	}
+}
+
 func TestCommentsTabLabelsThreadsInWords(t *testing.T) {
 	m := pressPR(openedPRs(t, newFakeGH(t)), "]", "]")
 

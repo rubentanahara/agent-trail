@@ -207,6 +207,7 @@ The list has *Needs my review*, *My PRs* and *All open* (up to 100). The detail 
 | `A` | Review: `a` approve, `r` request changes, `c` comment, then your editor, then `y` |
 | `L` | Checks tab: read the log of a GitHub Actions check (`a` failed steps or full log, last 5000 lines; `/` search, `n` `N` next match) |
 | `E` | Checks tab: re-run a GitHub Actions check, after `y` (`a` for all jobs) |
+| | Checks tab: below the PR checks, "Repository runs" lists the latest runs outside pull requests (`main` pushes, tags, schedules); `o` opens one |
 | `c` | Diff tab: comment on an added or unchanged line. Comments join your pending review |
 | `S` `D` | Submit or discard your pending review (`Pending (N)` shows in the header) |
 

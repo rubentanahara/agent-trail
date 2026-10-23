@@ -84,6 +84,12 @@ type prDiffMsg struct {
 	err             error
 }
 
+type prRunsMsg struct {
+	seq, generation int
+	runs            []gh.Check
+	err             error
+}
+
 type prOpenedMsg struct{ err error }
 
 func (prStartMsg) isPRMessage()   {}
@@ -91,6 +97,7 @@ func (prListMsg) isPRMessage()    {}
 func (prDetailMsg) isPRMessage()  {}
 func (prThreadsMsg) isPRMessage() {}
 func (prDiffMsg) isPRMessage()    {}
+func (prRunsMsg) isPRMessage()    {}
 func (prOpenedMsg) isPRMessage()  {}
 
 type slot struct {
@@ -168,14 +175,18 @@ type prScreen struct {
 	detailSlot slot
 	threadSlot slot
 	diffSlot   slot
+	runsSlot   slot
 	logSlot    slot
 
 	bodyMarkdown *markdownCache
 
-	details map[int]gh.PR
-	stamps  map[int]prStamp
-	threads map[int]prThreadData
-	diffs   map[int]prDiffData
+	details    map[int]gh.PR
+	stamps     map[int]prStamp
+	threads    map[int]prThreadData
+	diffs      map[int]prDiffData
+	runs       []gh.Check
+	runsAt     time.Time
+	runsLoaded bool
 
 	tabCursor [prTabCount]int
 	tabTop    [prTabCount]int
@@ -364,6 +375,8 @@ func (m *model) absorbPR(msg prMessage) tea.Cmd {
 		return m.absorbPRThreads(msg)
 	case prDiffMsg:
 		return m.absorbPRDiff(msg)
+	case prRunsMsg:
+		m.absorbPRRuns(msg)
 	case prWriteMsg:
 		return m.absorbWrite(msg)
 	case composedMsg:
@@ -571,6 +584,8 @@ func (m *model) absorbPRDetail(msg prDetailMsg) tea.Cmd {
 
 func (m *model) fetchTabData() tea.Cmd {
 	switch m.pr.tab {
+	case checksTab:
+		return m.fetchRuns()
 	case commentsTab:
 		return m.fetchThreads()
 	case diffTab:
@@ -662,12 +677,44 @@ func (m *model) absorbPRDiff(msg prDiffMsg) tea.Cmd {
 	return m.fetchTabData()
 }
 
+func (m *model) fetchRuns() tea.Cmd {
+	p := &m.pr
+	if p.runsSlot.busy || (p.runsLoaded && m.now.Sub(p.runsAt) < prStaleAfter) {
+		return nil
+	}
+	seq := p.runsSlot.begin()
+	return fetchPRRuns(p.readContext(), p.run, seq, p.generation)
+}
+
+func fetchPRRuns(ctx context.Context, run gh.Runner, seq, generation int) tea.Cmd {
+	return func() tea.Msg {
+		readCtx, cancel := context.WithTimeout(ctx, gh.ReadTimeout)
+		defer cancel()
+		runs, err := gh.Runs(readCtx, run)
+		return prRunsMsg{seq: seq, generation: generation, runs: runs, err: err}
+	}
+}
+
+func (m *model) absorbPRRuns(msg prRunsMsg) {
+	p := &m.pr
+	if !p.runsSlot.accepts(msg.seq) || msg.generation != p.generation {
+		return
+	}
+	p.runsSlot.busy = false
+	if msg.err != nil {
+		m.noticeReadFailure("repository runs", msg.err)
+		return
+	}
+	p.runs, p.runsAt, p.runsLoaded = msg.runs, m.now, true
+}
+
 func (m *model) refreshPRs() tea.Cmd {
 	p := &m.pr
 	number := p.selectedNumber()
 	delete(p.threads, number)
 	delete(p.diffs, number)
 	delete(p.details, number)
+	p.runsLoaded = false
 	return tea.Batch(m.fetchPRs(), m.fetchTabData())
 }
 

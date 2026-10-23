@@ -1,0 +1,5 @@
+[
+  {"conclusion":"success","displayTitle":"feat: ship","event":"push","headBranch":"main","startedAt":"2026-10-23T09:00:00Z","status":"completed","updatedAt":"2026-10-23T09:01:00Z","url":"https://github.com/o/r/actions/runs/1","workflowName":"ci"},
+  {"conclusion":"failure","displayTitle":"scratch","event":"pull_request","headBranch":"scratch","startedAt":"2026-10-23T09:00:00Z","status":"completed","updatedAt":"2026-10-23T09:01:00Z","url":"https://github.com/o/r/actions/runs/2","workflowName":"ci"},
+  {"conclusion":"","displayTitle":"nightly","event":"schedule","headBranch":"main","startedAt":"2026-10-23T09:30:00Z","status":"in_progress","updatedAt":"2026-10-23T09:31:00Z","url":"https://github.com/o/r/actions/runs/3","workflowName":"nightly"}
+]

@@ -76,6 +76,7 @@ func newFakeGH(t *testing.T) *fakeGH {
 	f.set(gh.ViewerArgs(), []byte(prViewer+"\n"))
 	f.set(gh.ListArgs(), testdata(t, "list.json"))
 	f.set(gh.ReviewRequestedArgs(), testdata(t, "requested.json"))
+	f.set(gh.RunsArgs(), testdata(t, "runs.json"))
 	for _, number := range []int{prForkPR, prBranchPR} {
 		f.set(gh.ViewArgs(number), viewJSON(t, number))
 		f.set(gh.DiffArgs(number), testdata(t, "diff.patch"))

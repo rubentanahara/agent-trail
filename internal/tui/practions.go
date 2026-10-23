@@ -148,6 +148,8 @@ func (p *prScreen) invalidateReads() {
 	p.detailSlot.invalidate()
 	p.threadSlot.invalidate()
 	p.diffSlot.invalidate()
+	p.runsSlot.invalidate()
+	p.runsLoaded = false
 }
 
 func (m model) writeBlocksQuit(armed bool) bool {
@@ -345,7 +347,7 @@ func (m *model) askRerun() {
 
 func (m model) cursorCheck(pr gh.PR) (gh.Check, bool) {
 	line, found := m.cursorLine()
-	if !found || m.pr.tab != checksTab || line.ref < 0 || line.ref >= len(pr.Checks) {
+	if !found || m.pr.tab != checksTab || line.src == sourceRun || line.ref < 0 || line.ref >= len(pr.Checks) {
 		return gh.Check{}, false
 	}
 	return pr.Checks[line.ref], true

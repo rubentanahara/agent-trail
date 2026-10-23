@@ -177,6 +177,8 @@ func (m model) cursorURL(pr gh.PR) string {
 		return ""
 	}
 	switch {
+	case m.pr.tab == checksTab && line.src == sourceRun && line.ref < len(m.pr.runs):
+		return m.pr.runs[line.ref].URL
 	case m.pr.tab == checksTab && line.ref < len(pr.Checks):
 		return pr.Checks[line.ref].URL
 	case m.pr.tab == commentsTab && line.src == sourceComment && line.ref < len(pr.Comments):

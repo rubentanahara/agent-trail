@@ -29,6 +29,7 @@ const (
 	sourceNone prSource = iota
 	sourceComment
 	sourceThread
+	sourceRun
 )
 
 type prLine struct {
@@ -197,12 +198,26 @@ func checkSummary(pr gh.PR) string {
 }
 
 func (m model) checkLines(pr gh.PR) []prLine {
-	if len(pr.Checks) == 0 {
-		return plainLines(faintStyle.Render("No checks reported"))
+	lines := plainLines(faintStyle.Render("No checks reported"))
+	if len(pr.Checks) > 0 {
+		lines = make([]prLine, len(pr.Checks))
+		for i, check := range pr.Checks {
+			lines[i] = prLine{text: m.checkRow(check), ref: i, sub: -1, file: -1}
+		}
 	}
-	lines := make([]prLine, len(pr.Checks))
-	for i, check := range pr.Checks {
-		lines[i] = prLine{text: m.checkRow(check), ref: i, sub: -1, file: -1}
+	return append(lines, m.runLines()...)
+}
+
+func (m model) runLines() []prLine {
+	lines := plainLines("", titleStyle.Render("Repository runs")+faintStyle.Render(" · not tied to this pull request"))
+	switch {
+	case !m.pr.runsLoaded:
+		return append(lines, plainLines(faintStyle.Render(loadingText))...)
+	case len(m.pr.runs) == 0:
+		return append(lines, plainLines(faintStyle.Render("No runs outside pull requests"))...)
+	}
+	for i, run := range m.pr.runs {
+		lines = append(lines, prLine{text: m.checkRow(run), ref: i, sub: -1, src: sourceRun, file: -1})
 	}
 	return lines
 }

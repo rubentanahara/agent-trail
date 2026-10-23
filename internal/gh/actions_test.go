@@ -1,6 +1,7 @@
 package gh
 
 import (
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -126,5 +127,24 @@ func TestIsRunInProgress(t *testing.T) {
 	err := &Error{Stderr: "run 1 is still in progress; logs will be available when it is complete"}
 	if !IsRunInProgress(err) {
 		t.Fatal("expected in progress")
+	}
+}
+
+func TestDecodeRunsKeepsRepoWideRunsAndDropsPullRequestOnes(t *testing.T) {
+	data, err := os.ReadFile("testdata/runs.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	runs, err := DecodeRuns(data)
+
+	if err != nil || len(runs) != 2 {
+		t.Fatalf("runs = %+v, err = %v", runs, err)
+	}
+	if runs[0].State != CheckPassing || runs[0].Workflow != "ci · push · main" || runs[0].CompletedAt.IsZero() {
+		t.Fatalf("first = %+v", runs[0])
+	}
+	if runs[1].State != CheckPending || !runs[1].CompletedAt.IsZero() {
+		t.Fatalf("second = %+v", runs[1])
 	}
 }
