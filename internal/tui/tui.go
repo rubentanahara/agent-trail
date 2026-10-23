@@ -382,7 +382,10 @@ func (m model) includes(index int) bool {
 }
 
 func (m *model) refilter() {
-	selected := m.selectedEvent()
+	m.refilterAround(m.selectedEvent())
+}
+
+func (m *model) refilterAround(selected int) {
 	m.visible = m.visible[:0]
 	for i := range m.events {
 		if m.includes(i) {
@@ -725,16 +728,19 @@ func (m *model) forgetSession(key string) {
 }
 
 func (m *model) dropEvents(drop func(session string) bool) {
-	kept := 0
+	previous, selected, kept := m.selectedEvent(), noEvent, 0
 	for i, event := range m.events {
-		if !drop(event.Session) {
-			m.events[kept], m.haystack[kept] = event, m.haystack[i]
-			kept++
+		if drop(event.Session) {
+			continue
 		}
+		if i == previous {
+			selected = kept
+		}
+		m.events[kept], m.haystack[kept] = event, m.haystack[i]
+		kept++
 	}
 	m.events, m.haystack = m.events[:kept], m.haystack[:kept]
 	m.detailRequested, m.detailShown, m.detailData = noEvent, noEvent, trail.Detail{}
-	m.visible = m.visible[:0]
-	m.refilter()
+	m.refilterAround(selected)
 	m.refreshDetail()
 }
