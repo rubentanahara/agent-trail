@@ -49,8 +49,11 @@ type copilotData struct {
 	Usage             *copilotUsage       `json:"usage"`
 	PremiumRequests   *float64            `json:"totalPremiumRequests"`
 	CodeChanges       *copilotCodeChanges `json:"codeChanges"`
-	AgentName         string              `json:"agentName"`
-	AgentDisplayName  string              `json:"agentDisplayName"`
+	FileEdits         []struct {
+		Path string `json:"path"`
+	} `json:"fileEdits"`
+	AgentName        string `json:"agentName"`
+	AgentDisplayName string `json:"agentDisplayName"`
 }
 
 type copilotPermission struct {
@@ -174,6 +177,9 @@ func copilotEvents(eventType string, data copilotData) []Event {
 	event := Event{Kind: kind, Text: text}
 	if eventType == "tool.execution_start" {
 		event.Files = pathArguments(data.Arguments)
+	}
+	if eventType == "tool.execution_complete" {
+		event.patches = copilotPatches(data)
 	}
 	if eventType == "session.usage_record" && data.Usage != nil {
 		usage := copilotUsageOf(*data.Usage)

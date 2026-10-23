@@ -60,6 +60,7 @@ type claudeEntry struct {
 	LinesAdded     int                `json:"totalLinesAdded"`
 	TotalCostUSD   *float64           `json:"totalCostUSD"`
 	LinesRemoved   int                `json:"totalLinesRemoved"`
+	ToolUseResult  json.RawMessage    `json:"toolUseResult"`
 }
 
 type claudeAttachment struct {
@@ -325,6 +326,7 @@ func claudeMessageEvents(agent string, entry claudeEntry) []Event {
 			events = append(events, event)
 		}
 	}
+	attachClaudePatches(events, entry.ToolUseResult)
 	return events
 }
 

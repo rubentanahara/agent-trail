@@ -46,7 +46,10 @@ type Event struct {
 	Session string
 	Usage   *Usage
 	Files   []string
+	Changes []FileChange
 	Source  Source
+
+	patches []FilePatch
 }
 
 type Source struct {

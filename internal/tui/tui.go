@@ -112,6 +112,7 @@ type model struct {
 	waitingSince  map[string]time.Time
 
 	statsScreen statsScreen
+	filesScreen filesScreen
 
 	claudeLimits    limits.Claude
 	hasClaudeLimits bool
@@ -207,6 +208,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.refreshDetail()
+		m.resizeFiles()
 	case pollMsg:
 		return m, tea.Batch(m.poll(), m.statsScreen.poll(m.context.Everywhere), pollLimits(m.context.Home))
 	case batchMsg:
@@ -215,6 +217,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.claudeLimits, m.hasClaudeLimits = msg.claude, msg.found
 	case statsMsg:
 		m.statsScreen.absorb(msg.batch)
+	case filePatchesMsg:
+		m.showFilePatches(msg)
 	case savingsMsg:
 		m.statsScreen.savings = msg.found
 	case deletedMsg:
@@ -448,6 +452,8 @@ func (m *model) key(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return m.confirmKey(msg.String()), false
 	case m.statsScreen.shown:
 		return m.statsKey(msg.String())
+	case m.filesScreen.shown:
+		return m.filesKey(msg.String())
 	}
 	if target, ok := focusKeys[msg.String()]; ok {
 		m.focus = target
@@ -458,6 +464,8 @@ func (m *model) key(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return nil, true
 	case "t":
 		return m.statsScreen.open(m.context), false
+	case "d":
+		return m.openFiles(), false
 	case "z":
 		m.zoomed = !m.zoomed
 	case "o":

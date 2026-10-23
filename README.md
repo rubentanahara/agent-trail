@@ -77,6 +77,7 @@ When stdout is not a terminal it prints the history as plain text and exits.
 | `y` | Summarize the selected session with Claude Haiku in the detail pane, or go back to the event detail (see Summary) |
 | `m` | Show or hide sessions started by a program (see Stats screen). Hidden at start when following every repository |
 | `x` | Sessions pane: delete the selected session and its transcript files, after you confirm with `y`. A session is refused while it is running, while a Codex or Copilot turn is open, or if its transcript changed in the last 2 minutes. Agents are deleted with their parent |
+| `d` | Open or close the files screen for the selected session and its agents (all listed sessions on the All sessions row): files changed, most recent first, with `+added −removed` and the number of edits. `↑` `↓` pick a file, `tab` or `enter` moves to its diff, `pgup` `pgdown` scroll it, `esc` or `d` closes |
 | `t` | Open or close the stats screen (see below) |
 | `q` | Quit |
 
@@ -156,6 +157,8 @@ Output-style tools such as caveman and ponytail record no savings: there is no r
 ## What it shows
 
 **Sessions.** One row per session that had activity in the replay window, the most recently active first. Each row shows its state, the time since its last event, and its cost including its agents. The cost is in dollars only, `—` when the model has no price, and red when the session is billed to an API key. The name is the session title the CLI generated or you set, otherwise the first prompt. When following every repository, the row also names the folder the session ran in.
+
+**Files changed.** `d` lists the files a session edited, with lines added and removed and every change as a diff in time order. Claude Code: the exact patch it records for each Edit, Write and MultiEdit result, plus the diff of files a Bash command such as `sed -i` modified. Codex: file changes, counted from the content of a new file or from the unified diff Codex records; a change with no diff is listed as `+? −?`. Copilot CLI: the diff stored with each edit and create result.
 
 **Agents.** Each Claude Code subagent (a Task or Agent call, foreground or background) gets its own row under the session that started it, named by the description it was given, with its agent type. `●` means it is still running and `✓` that it finished, read from the `.meta.json` Claude Code writes beside each agent transcript. Agents are listed while their session is running or selected, and folded away otherwise. Selecting the session shows its events and every agent's; selecting an agent shows only that agent's. Codex and Copilot CLI record their subagents inside the session transcript, so they stay in the parent row and the `Subagents` field.
 

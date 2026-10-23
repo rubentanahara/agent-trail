@@ -138,6 +138,9 @@ func (m model) render() string {
 	if m.statsScreen.shown {
 		return m.renderStats()
 	}
+	if m.filesScreen.shown {
+		return m.renderFiles()
+	}
 	g := m.layout()
 	right := stack(
 		paneBox{m.eventsTitle(), m.eventRows(g.rightW-2, g.eventsH-borderAndTitle-1), g.rightW, g.eventsH, m.borderFor(eventsPane)}.render(),
@@ -539,9 +542,9 @@ func fitHints(hints []string, room int) string {
 func (m model) paneHints() []string {
 	switch m.focus {
 	case sessionsPane:
-		return []string{"↑↓ pick", "enter events", "c continue", "x delete", "o running only", "y summary", "m " + shownOrHidden(!m.hideAutomated) + " automated", "/ filter", "a all"}
+		return []string{"↑↓ pick", "enter events", "c continue", "y summary", "d files", "x delete", "o running only", "m " + shownOrHidden(!m.hideAutomated) + " automated", "/ filter", "a all"}
 	case eventsPane:
-		return []string{"↑↓ move", "enter detail", "s event's session", "y summary", "a all", "n " + shownOrHidden(!m.hideNoise) + " noise", "u usage", "f follow", "/ filter"}
+		return []string{"↑↓ move", "enter detail", "s event's session", "y summary", "d files", "a all", "n " + shownOrHidden(!m.hideNoise) + " noise", "u usage", "f follow", "/ filter"}
 	}
 	return []string{"↑↓ scroll", "r " + rawOrText(m.raw), "/ filter lines", "esc back"}
 }

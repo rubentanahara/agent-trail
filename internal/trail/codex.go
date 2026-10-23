@@ -69,7 +69,9 @@ type codexItem struct {
 }
 
 type codexFileChange struct {
-	Type string `json:"type"`
+	Type        string `json:"type"`
+	Content     string `json:"content"`
+	UnifiedDiff string `json:"unified_diff"`
 }
 
 type codexInfo struct {
@@ -271,7 +273,7 @@ func codexItemEvents(raw json.RawMessage) []Event {
 			{Kind: KindResult, Text: codexCommandStatus(item) + item.AggregatedOutput},
 		}
 	case "FileChange":
-		return []Event{{Kind: KindEdit, Text: codexChanges(item.Changes), Files: slices.Collect(maps.Keys(item.Changes))}}
+		return []Event{{Kind: KindEdit, Text: codexChanges(item.Changes), Files: slices.Collect(maps.Keys(item.Changes)), patches: codexPatches(item.Changes)}}
 	}
 	kind := Kind(item.Type)
 	if kind == "" {

@@ -354,6 +354,7 @@ func (t *Trail) parseLine(line []byte, file *transcript, session *Session, at So
 		events[i].Source = Source{Path: at.Path, Offset: at.Offset, Index: i}
 		events[i].Summary = Clip(t.commandSummary(events[i].Text, session.Cwd))
 		events[i].Text = ""
+		events[i].Changes, events[i].patches = countChanges(events[i].patches), nil
 		session.touch(events[i].Time)
 		if events[i].Kind == KindUser && events[i].Agent == "" {
 			session.setFallbackName(events[i].Summary)
