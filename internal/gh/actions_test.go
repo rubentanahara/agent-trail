@@ -148,3 +148,54 @@ func TestDecodeRunsKeepsRepoWideRunsAndDropsPullRequestOnes(t *testing.T) {
 		t.Fatalf("second = %+v", runs[1])
 	}
 }
+
+func TestDecodeBoardReadsProjectFieldsAndSkipsNonIssueItems(t *testing.T) {
+	board, err := DecodeBoard(fixtureFile(t, "board.json"))
+	if err != nil || len(board.Projects) != 1 {
+		t.Fatalf("board = %+v, err = %v", board, err)
+	}
+	project := board.Projects[0]
+	if project.Title != "lazyclipboard" || project.Total != 200 || len(project.Issues) != 8 {
+		t.Fatalf("project = %s total %d issues %d", project.Title, project.Total, len(project.Issues))
+	}
+	first := project.Issues[0]
+	if first.Number != 1 || first.Field("Status") != "Done" || first.Field("Priority") != "P0" || first.Field(titleFieldName) != "" {
+		t.Fatalf("first = %+v", first)
+	}
+	if first.SubTotal != 3 || len(first.Labels) != 2 || len(first.Assignees) != 1 || first.Author != "rubentanahara" {
+		t.Fatalf("first = %+v", first)
+	}
+	if len(project.Columns) == 0 || len(board.Open) != 4 || board.OpenTotal < 4 {
+		t.Fatalf("open = %d of %d", len(board.Open), board.OpenTotal)
+	}
+}
+
+func TestDecodeIssueDetailReadsCommentsLinkedPullRequestsAndSubIssues(t *testing.T) {
+	detail, err := DecodeIssueDetail(fixtureFile(t, "issue_detail.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Body == "" || detail.CommentTotal != 1 || detail.Comments[0].Author != "octo" {
+		t.Fatalf("detail = %+v", detail)
+	}
+	if len(detail.ClosedBy) != 1 || detail.ClosedBy[0].State != "MERGED" || len(detail.SubIssues) == 0 {
+		t.Fatalf("detail = %+v", detail)
+	}
+}
+
+func TestBoardArgsKeepValuesOutOfTheQuery(t *testing.T) {
+	args := strings.Join(BoardArgs("o", "n; drop"), " ")
+
+	if strings.Contains(args[:strings.Index(args, "-f owner")], "drop") {
+		t.Fatalf("name leaked into the query: %s", args)
+	}
+}
+
+func fixtureFile(t *testing.T, name string) []byte {
+	t.Helper()
+	data, err := os.ReadFile("testdata/" + name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}

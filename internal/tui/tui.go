@@ -114,8 +114,9 @@ type model struct {
 	notice        string
 	waitingSince  map[string]time.Time
 
-	now time.Time
-	pr  prScreen
+	now    time.Time
+	pr     prScreen
+	issues issueScreen
 
 	statsScreen statsScreen
 	filesScreen filesScreen
@@ -167,6 +168,7 @@ func newModel(follower *trail.Trail, history trail.Batch, context Context) model
 		detail:          detail,
 		summary:         summaryState{rendered: &markdownCache{}},
 		pr:              newPRScreen(context.Repo),
+		issues:          newIssueScreen(context.Repo),
 		detailRequested: noEvent,
 		detailShown:     noEvent,
 	}
@@ -225,6 +227,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.poll(), m.statsScreen.poll(m.context.Everywhere), pollLimits(m.context.Home), m.pollPRs())
 	case prMessage:
 		cmds = append(cmds, m.absorbPR(msg))
+	case issueMessage:
+		cmds = append(cmds, m.absorbIssue(msg))
 	case batchMsg:
 		cmds = append(cmds, m.absorbPolled(msg.batch), tick())
 	case limitsMsg:
@@ -499,6 +503,8 @@ func (m *model) key(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return m.statsKey(msg.String())
 	case m.filesScreen.shown:
 		return m.filesKey(msg.String())
+	case m.issues.shown:
+		return m.issuesKey(msg)
 	case m.pr.shown:
 		return m.prKey(msg)
 	}
@@ -517,6 +523,8 @@ func (m *model) key(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return m.openFiles(), false
 	case "p":
 		return m.openPRs(), false
+	case "i":
+		return m.openIssues(), false
 	case "z":
 		m.zoomed = !m.zoomed
 	case "o":

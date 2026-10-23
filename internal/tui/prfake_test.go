@@ -135,7 +135,7 @@ func settlePR(m model, cmd tea.Cmd) model {
 		for _, inner := range msg {
 			m = settlePR(m, inner)
 		}
-	case prMessage:
+	case prMessage, issueMessage:
 		updated, next := m.Update(msg)
 		m = settlePR(updated.(model), next)
 	}

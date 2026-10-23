@@ -70,6 +70,18 @@ var helpSections = []helpSection{
 		{"pgup pgdown", "scroll the diff"},
 		{"d, esc", "close"},
 	}},
+	{"Issues screen", []keyHelp{
+		{"i", "open or close the repository's issues, grouped by project column"},
+		{"up down j k, pgup pgdown", "move in the focused pane"},
+		{"tab, 1 2, enter", "switch between the list and the detail"},
+		{"[ ]", "previous or next tab: Overview, Comments, Linked"},
+		{"P", "next project, then the repository's open issues"},
+		{"R", "refresh now"},
+		{"o", "open the issue, or the selected comment, pull request or sub-issue, in the browser"},
+		{"/", "filter the list"},
+		{"z", "zoom the focused pane"},
+		{"esc", "clear the filter, back to the list, then close"},
+	}},
 	{"Pull requests screen", []keyHelp{
 		{"p", "open or close; on a session with a pull request, open that one"},
 		{"up down j k, pgup pgdown", "move in the focused pane"},

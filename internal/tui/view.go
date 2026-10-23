@@ -149,6 +149,9 @@ func (m model) render() string {
 	if m.filesScreen.shown {
 		return m.renderFiles()
 	}
+	if m.issues.shown {
+		return m.renderIssues()
+	}
 	if m.pr.shown {
 		return m.renderPRScreen()
 	}

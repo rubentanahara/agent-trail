@@ -1,0 +1,921 @@
+{
+ "data": {
+  "repository": {
+   "projectsV2": {
+    "nodes": [
+     {
+      "number": 13,
+      "title": "lazyclipboard",
+      "url": "https://github.com/users/rubentanahara/projects/13",
+      "field": {
+       "options": [
+        {
+         "name": "Todo"
+        },
+        {
+         "name": "In Progress"
+        },
+        {
+         "name": "In Review"
+        },
+        {
+         "name": "Blocked"
+        },
+        {
+         "name": "Done"
+        }
+       ]
+      },
+      "items": {
+       "totalCount": 200,
+       "nodes": [
+        {
+         "fieldValues": {
+          "nodes": [
+           {
+            "__typename": "ProjectV2ItemFieldUserValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldRepositoryValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldLabelValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldTextValue",
+            "text": "E0 \u00b7 Foundation: scaffolding, shared contracts, tokens, components, CI",
+            "field": {
+             "name": "Title"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "P0",
+            "field": {
+             "name": "Priority"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "Done",
+            "field": {
+             "name": "Status"
+            }
+           }
+          ]
+         },
+         "content": {
+          "__typename": "Issue",
+          "number": 1,
+          "title": "E0 \u00b7 Foundation: scaffolding, shared contracts, tokens, components, CI",
+          "state": "CLOSED",
+          "url": "https://github.com/rubentanahara/lazyclipboard/issues/1",
+          "createdAt": "2026-09-30T15:05:46Z",
+          "updatedAt": "2026-10-01T03:45:01Z",
+          "author": {
+           "login": "rubentanahara"
+          },
+          "assignees": {
+           "nodes": [
+            {
+             "login": "rubentanahara"
+            }
+           ]
+          },
+          "labels": {
+           "nodes": [
+            {
+             "name": "prio:P0"
+            },
+            {
+             "name": "type:epic"
+            }
+           ]
+          },
+          "milestone": null,
+          "comments": {
+           "totalCount": 0
+          },
+          "parent": null,
+          "subIssuesSummary": {
+           "total": 3,
+           "completed": 3
+          }
+         }
+        },
+        {
+         "fieldValues": {
+          "nodes": [
+           {
+            "__typename": "ProjectV2ItemFieldUserValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldRepositoryValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldLabelValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldTextValue",
+            "text": "E1 \u00b7 R0 spike: one shortcut, one panel, one paste on three OSes",
+            "field": {
+             "name": "Title"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "P0",
+            "field": {
+             "name": "Priority"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "In Progress",
+            "field": {
+             "name": "Status"
+            }
+           }
+          ]
+         },
+         "content": {
+          "__typename": "Issue",
+          "number": 2,
+          "title": "E1 \u00b7 R0 spike: one shortcut, one panel, one paste on three OSes",
+          "state": "OPEN",
+          "url": "https://github.com/rubentanahara/lazyclipboard/issues/2",
+          "createdAt": "2026-09-30T15:05:50Z",
+          "updatedAt": "2026-09-30T15:05:55Z",
+          "author": {
+           "login": "rubentanahara"
+          },
+          "assignees": {
+           "nodes": [
+            {
+             "login": "rubentanahara"
+            }
+           ]
+          },
+          "labels": {
+           "nodes": [
+            {
+             "name": "prio:P0"
+            },
+            {
+             "name": "type:epic"
+            }
+           ]
+          },
+          "milestone": null,
+          "comments": {
+           "totalCount": 0
+          },
+          "parent": null,
+          "subIssuesSummary": {
+           "total": 1,
+           "completed": 0
+          }
+         }
+        },
+        {
+         "fieldValues": {
+          "nodes": [
+           {
+            "__typename": "ProjectV2ItemFieldUserValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldRepositoryValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldLabelValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldTextValue",
+            "text": "E0.S1 \u00b7 Workspace and contracts",
+            "field": {
+             "name": "Title"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "P0",
+            "field": {
+             "name": "Priority"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "Done",
+            "field": {
+             "name": "Status"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldIterationValue",
+            "title": "Sprint 0",
+            "field": {
+             "name": "Sprint"
+            }
+           }
+          ]
+         },
+         "content": {
+          "__typename": "Issue",
+          "number": 16,
+          "title": "E0.S1 \u00b7 Workspace and contracts",
+          "state": "CLOSED",
+          "url": "https://github.com/rubentanahara/lazyclipboard/issues/16",
+          "createdAt": "2026-09-30T15:07:31Z",
+          "updatedAt": "2026-09-30T20:14:58Z",
+          "author": {
+           "login": "rubentanahara"
+          },
+          "assignees": {
+           "nodes": [
+            {
+             "login": "rubentanahara"
+            }
+           ]
+          },
+          "labels": {
+           "nodes": [
+            {
+             "name": "prio:P0"
+            },
+            {
+             "name": "type:story"
+            }
+           ]
+          },
+          "milestone": null,
+          "comments": {
+           "totalCount": 1
+          },
+          "parent": {
+           "number": 1,
+           "title": "E0 \u00b7 Foundation: scaffolding, shared contracts, tokens, components, CI"
+          },
+          "subIssuesSummary": {
+           "total": 15,
+           "completed": 15
+          }
+         }
+        },
+        {
+         "fieldValues": {
+          "nodes": [
+           {
+            "__typename": "ProjectV2ItemFieldUserValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldRepositoryValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldLabelValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldTextValue",
+            "text": "E0.S2 \u00b7 Component library from the design system",
+            "field": {
+             "name": "Title"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "P0",
+            "field": {
+             "name": "Priority"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "Done",
+            "field": {
+             "name": "Status"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldIterationValue",
+            "title": "Sprint 0",
+            "field": {
+             "name": "Sprint"
+            }
+           }
+          ]
+         },
+         "content": {
+          "__typename": "Issue",
+          "number": 17,
+          "title": "E0.S2 \u00b7 Component library from the design system",
+          "state": "CLOSED",
+          "url": "https://github.com/rubentanahara/lazyclipboard/issues/17",
+          "createdAt": "2026-09-30T15:07:35Z",
+          "updatedAt": "2026-09-30T21:51:06Z",
+          "author": {
+           "login": "rubentanahara"
+          },
+          "assignees": {
+           "nodes": [
+            {
+             "login": "rubentanahara"
+            }
+           ]
+          },
+          "labels": {
+           "nodes": [
+            {
+             "name": "prio:P0"
+            },
+            {
+             "name": "type:story"
+            }
+           ]
+          },
+          "milestone": null,
+          "comments": {
+           "totalCount": 1
+          },
+          "parent": {
+           "number": 1,
+           "title": "E0 \u00b7 Foundation: scaffolding, shared contracts, tokens, components, CI"
+          },
+          "subIssuesSummary": {
+           "total": 4,
+           "completed": 4
+          }
+         }
+        },
+        {
+         "fieldValues": {
+          "nodes": [
+           {
+            "__typename": "ProjectV2ItemFieldUserValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldRepositoryValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldLabelValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldTextValue",
+            "text": "E0.S3 \u00b7 Contracts maintenance per slice",
+            "field": {
+             "name": "Title"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "P0",
+            "field": {
+             "name": "Priority"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "Done",
+            "field": {
+             "name": "Status"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldIterationValue",
+            "title": "Sprint 2",
+            "field": {
+             "name": "Sprint"
+            }
+           }
+          ]
+         },
+         "content": {
+          "__typename": "Issue",
+          "number": 18,
+          "title": "E0.S3 \u00b7 Contracts maintenance per slice",
+          "state": "CLOSED",
+          "url": "https://github.com/rubentanahara/lazyclipboard/issues/18",
+          "createdAt": "2026-09-30T15:07:39Z",
+          "updatedAt": "2026-10-01T02:40:55Z",
+          "author": {
+           "login": "rubentanahara"
+          },
+          "assignees": {
+           "nodes": [
+            {
+             "login": "rubentanahara"
+            }
+           ]
+          },
+          "labels": {
+           "nodes": [
+            {
+             "name": "prio:P0"
+            },
+            {
+             "name": "type:story"
+            }
+           ]
+          },
+          "milestone": null,
+          "comments": {
+           "totalCount": 1
+          },
+          "parent": {
+           "number": 1,
+           "title": "E0 \u00b7 Foundation: scaffolding, shared contracts, tokens, components, CI"
+          },
+          "subIssuesSummary": {
+           "total": 5,
+           "completed": 4
+          }
+         }
+        },
+        {
+         "fieldValues": {
+          "nodes": [
+           {
+            "__typename": "ProjectV2ItemFieldUserValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldRepositoryValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldLabelValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldTextValue",
+            "text": "E1.S1 \u00b7 R0 spike per OS",
+            "field": {
+             "name": "Title"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "P0",
+            "field": {
+             "name": "Priority"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "In Progress",
+            "field": {
+             "name": "Status"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldIterationValue",
+            "title": "Sprint 0",
+            "field": {
+             "name": "Sprint"
+            }
+           }
+          ]
+         },
+         "content": {
+          "__typename": "Issue",
+          "number": 19,
+          "title": "E1.S1 \u00b7 R0 spike per OS",
+          "state": "OPEN",
+          "url": "https://github.com/rubentanahara/lazyclipboard/issues/19",
+          "createdAt": "2026-09-30T15:07:43Z",
+          "updatedAt": "2026-09-30T15:07:43Z",
+          "author": {
+           "login": "rubentanahara"
+          },
+          "assignees": {
+           "nodes": [
+            {
+             "login": "rubentanahara"
+            }
+           ]
+          },
+          "labels": {
+           "nodes": [
+            {
+             "name": "prio:P0"
+            },
+            {
+             "name": "type:story"
+            }
+           ]
+          },
+          "milestone": null,
+          "comments": {
+           "totalCount": 0
+          },
+          "parent": {
+           "number": 2,
+           "title": "E1 \u00b7 R0 spike: one shortcut, one panel, one paste on three OSes"
+          },
+          "subIssuesSummary": {
+           "total": 7,
+           "completed": 5
+          }
+         }
+        },
+        {
+         "fieldValues": {
+          "nodes": [
+           {
+            "__typename": "ProjectV2ItemFieldUserValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldRepositoryValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldLabelValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldTextValue",
+            "text": "E0.S1.T1 \u00b7 Scaffold the pnpm, Turborepo and Cargo workspace with a Tauri 2 app skeleton",
+            "field": {
+             "name": "Title"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "P0",
+            "field": {
+             "name": "Priority"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "L",
+            "field": {
+             "name": "Size"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "DevOps",
+            "field": {
+             "name": "Discipline"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "Done",
+            "field": {
+             "name": "Status"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldIterationValue",
+            "title": "Sprint 0",
+            "field": {
+             "name": "Sprint"
+            }
+           }
+          ]
+         },
+         "content": {
+          "__typename": "Issue",
+          "number": 56,
+          "title": "E0.S1.T1 \u00b7 Scaffold the pnpm, Turborepo and Cargo workspace with a Tauri 2 app skeleton",
+          "state": "CLOSED",
+          "url": "https://github.com/rubentanahara/lazyclipboard/issues/56",
+          "createdAt": "2026-09-30T15:10:05Z",
+          "updatedAt": "2026-09-30T18:15:31Z",
+          "author": {
+           "login": "rubentanahara"
+          },
+          "assignees": {
+           "nodes": [
+            {
+             "login": "rubentanahara"
+            }
+           ]
+          },
+          "labels": {
+           "nodes": [
+            {
+             "name": "area:devops"
+            },
+            {
+             "name": "prio:P0"
+            },
+            {
+             "name": "type:task"
+            }
+           ]
+          },
+          "milestone": null,
+          "comments": {
+           "totalCount": 5
+          },
+          "parent": {
+           "number": 16,
+           "title": "E0.S1 \u00b7 Workspace and contracts"
+          },
+          "subIssuesSummary": {
+           "total": 0,
+           "completed": 0
+          }
+         }
+        },
+        {
+         "fieldValues": {
+          "nodes": [
+           {
+            "__typename": "ProjectV2ItemFieldUserValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldRepositoryValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldLabelValue"
+           },
+           {
+            "__typename": "ProjectV2ItemFieldTextValue",
+            "text": "E0.S1.T2 \u00b7 C1 and C3: domain types and error unions",
+            "field": {
+             "name": "Title"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "P0",
+            "field": {
+             "name": "Priority"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "M",
+            "field": {
+             "name": "Size"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "Rust-core",
+            "field": {
+             "name": "Discipline"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldSingleSelectValue",
+            "name": "Done",
+            "field": {
+             "name": "Status"
+            }
+           },
+           {
+            "__typename": "ProjectV2ItemFieldIterationValue",
+            "title": "Sprint 0",
+            "field": {
+             "name": "Sprint"
+            }
+           }
+          ]
+         },
+         "content": {
+          "__typename": "Issue",
+          "number": 57,
+          "title": "E0.S1.T2 \u00b7 C1 and C3: domain types and error unions",
+          "state": "CLOSED",
+          "url": "https://github.com/rubentanahara/lazyclipboard/issues/57",
+          "createdAt": "2026-09-30T15:10:09Z",
+          "updatedAt": "2026-09-30T19:13:51Z",
+          "author": {
+           "login": "rubentanahara"
+          },
+          "assignees": {
+           "nodes": [
+            {
+             "login": "rubentanahara"
+            }
+           ]
+          },
+          "labels": {
+           "nodes": [
+            {
+             "name": "area:rust-core"
+            },
+            {
+             "name": "prio:P0"
+            },
+            {
+             "name": "type:task"
+            }
+           ]
+          },
+          "milestone": null,
+          "comments": {
+           "totalCount": 4
+          },
+          "parent": {
+           "number": 16,
+           "title": "E0.S1 \u00b7 Workspace and contracts"
+          },
+          "subIssuesSummary": {
+           "total": 0,
+           "completed": 0
+          }
+         }
+        },
+        {
+         "fieldValues": {
+          "nodes": [
+           {
+            "__typename": "ProjectV2ItemFieldTextValue",
+            "text": "a draft",
+            "field": {
+             "name": "Title"
+            }
+           }
+          ]
+         },
+         "content": {
+          "__typename": "DraftIssue"
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "issues": {
+    "totalCount": 158,
+    "nodes": [
+     {
+      "number": 240,
+      "title": "E0.S3.T5 \u00b7 P2 contracts maintenance: capture change requests to shared files",
+      "state": "OPEN",
+      "url": "https://github.com/rubentanahara/lazyclipboard/issues/240",
+      "createdAt": "2026-10-01T04:29:44Z",
+      "updatedAt": "2026-10-01T04:38:50Z",
+      "author": {
+       "login": "rubentanahara"
+      },
+      "assignees": {
+       "nodes": [
+        {
+         "login": "rubentanahara"
+        }
+       ]
+      },
+      "labels": {
+       "nodes": [
+        {
+         "name": "area:rust-core"
+        },
+        {
+         "name": "prio:P1"
+        },
+        {
+         "name": "type:task"
+        }
+       ]
+      },
+      "milestone": null,
+      "comments": {
+       "totalCount": 2
+      },
+      "parent": {
+       "number": 18,
+       "title": "E0.S3 \u00b7 Contracts maintenance per slice"
+      },
+      "subIssuesSummary": {
+       "total": 0,
+       "completed": 0
+      }
+     },
+     {
+      "number": 90,
+      "title": "E2.S1.T7 \u00b7 Capture panel UI: Captured Strip, group filter, arrow keys, Enter to save",
+      "state": "OPEN",
+      "url": "https://github.com/rubentanahara/lazyclipboard/issues/90",
+      "createdAt": "2026-09-30T15:12:13Z",
+      "updatedAt": "2026-10-01T04:23:16Z",
+      "author": {
+       "login": "rubentanahara"
+      },
+      "assignees": {
+       "nodes": [
+        {
+         "login": "rubentanahara"
+        }
+       ]
+      },
+      "labels": {
+       "nodes": [
+        {
+         "name": "area:ui"
+        },
+        {
+         "name": "prio:P1"
+        },
+        {
+         "name": "type:task"
+        }
+       ]
+      },
+      "milestone": null,
+      "comments": {
+       "totalCount": 2
+      },
+      "parent": {
+       "number": 20,
+       "title": "E2.S1 \u00b7 Capture a selection into a chosen group"
+      },
+      "subIssuesSummary": {
+       "total": 0,
+       "completed": 0
+      }
+     },
+     {
+      "number": 82,
+      "title": "E1.S1.T6 \u00b7 R0 results report, recorded measurements and the gate decision",
+      "state": "OPEN",
+      "url": "https://github.com/rubentanahara/lazyclipboard/issues/82",
+      "createdAt": "2026-09-30T15:11:43Z",
+      "updatedAt": "2026-10-01T03:58:50Z",
+      "author": {
+       "login": "rubentanahara"
+      },
+      "assignees": {
+       "nodes": [
+        {
+         "login": "rubentanahara"
+        }
+       ]
+      },
+      "labels": {
+       "nodes": [
+        {
+         "name": "area:docs"
+        },
+        {
+         "name": "prio:P0"
+        },
+        {
+         "name": "type:task"
+        }
+       ]
+      },
+      "milestone": null,
+      "comments": {
+       "totalCount": 1
+      },
+      "parent": {
+       "number": 19,
+       "title": "E1.S1 \u00b7 R0 spike per OS"
+      },
+      "subIssuesSummary": {
+       "total": 0,
+       "completed": 0
+      }
+     },
+     {
+      "number": 77,
+      "title": "E1.S1.T1 \u00b7 R0 spike on macOS",
+      "state": "OPEN",
+      "url": "https://github.com/rubentanahara/lazyclipboard/issues/77",
+      "createdAt": "2026-09-30T15:11:24Z",
+      "updatedAt": "2026-10-01T03:51:16Z",
+      "author": {
+       "login": "rubentanahara"
+      },
+      "assignees": {
+       "nodes": [
+        {
+         "login": "rubentanahara"
+        }
+       ]
+      },
+      "labels": {
+       "nodes": [
+        {
+         "name": "area:rust-os"
+        },
+        {
+         "name": "native"
+        },
+        {
+         "name": "prio:P0"
+        },
+        {
+         "name": "type:task"
+        }
+       ]
+      },
+      "milestone": null,
+      "comments": {
+       "totalCount": 2
+      },
+      "parent": {
+       "number": 19,
+       "title": "E1.S1 \u00b7 R0 spike per OS"
+      },
+      "subIssuesSummary": {
+       "total": 0,
+       "completed": 0
+      }
+     }
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,55 @@
+{
+ "data": {
+  "repository": {
+   "issue": {
+    "body": "Everything later issues depend on: the workspace, contracts C1 to C11, the token package, the component library, the e2e harness and CI. Directories are disjoint so later work runs in parallel worktrees.\n\n## Stories\nSub-issues of this epic; progress shows on the issue.",
+    "comments": {
+     "totalCount": 1,
+     "nodes": [
+      {
+       "id": "IC_1",
+       "author": {
+        "login": "octo"
+       },
+       "body": "looks **good**",
+       "createdAt": "2026-10-01T10:00:00Z",
+       "url": "https://github.com/o/r/issues/1#issuecomment-1"
+      }
+     ]
+    },
+    "closedByPullRequestsReferences": {
+     "nodes": [
+      {
+       "number": 9,
+       "title": "fix it",
+       "state": "MERGED",
+       "url": "https://github.com/o/r/pull/9"
+      }
+     ]
+    },
+    "subIssues": {
+     "nodes": [
+      {
+       "number": 16,
+       "title": "E0.S1 \u00b7 Workspace and contracts",
+       "state": "CLOSED",
+       "url": "https://github.com/rubentanahara/lazyclipboard/issues/16"
+      },
+      {
+       "number": 17,
+       "title": "E0.S2 \u00b7 Component library from the design system",
+       "state": "CLOSED",
+       "url": "https://github.com/rubentanahara/lazyclipboard/issues/17"
+      },
+      {
+       "number": 18,
+       "title": "E0.S3 \u00b7 Contracts maintenance per slice",
+       "state": "CLOSED",
+       "url": "https://github.com/rubentanahara/lazyclipboard/issues/18"
+      }
+     ]
+    }
+   }
+  }
+ }
+}

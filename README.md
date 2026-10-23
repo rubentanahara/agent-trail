@@ -234,6 +234,18 @@ When a top-level session starts waiting for you while agent-trail runs (Claude C
 
 **Claude usage windows.** On a subscription the 5-hour and 7-day windows are the real limit. They show as a `Claude` row in Totals and at the start of a Claude session's `Limits` line, with the reset time and the age of the figures. They come from the usage Claude Code caches in `~/.claude.json`, or from a statusline-fed file such as the one abtop writes (`~/.claude/abtop-rate-limits.json`); whichever is newer is shown. Claude Code refreshes its own cache only occasionally, so the age matters. Nothing is shown when neither exists.
 
+### Issues screen
+
+`i` opens the repository's issues, read-only, through `gh api graphql` (the `project` scope is needed for Projects). The list is grouped by the Status column of the repository's first linked GitHub Project, up to 100 items per project; `P` switches to the next project and finally to the repository's open issues. The detail pane has three tabs, switched with `[` and `]`:
+
+| Tab | Shows |
+| --- | --- |
+| Overview | State, author, dates, every project field (Status, Priority, Iteration, ...), assignees, labels, milestone, parent, sub-issue progress, and the description as markdown |
+| Comments | The first 50 comments |
+| Linked | Pull requests that close the issue, and its sub-issues |
+
+`o` opens the issue, or the selected comment, pull request or sub-issue, in the browser. `R` refreshes, `/` filters, `z` zooms, `esc` goes back.
+
 ## Cost and billing
 
 | | Billing detected from | Shown |
