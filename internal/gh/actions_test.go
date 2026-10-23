@@ -184,10 +184,15 @@ func TestDecodeIssueDetailReadsCommentsLinkedPullRequestsAndSubIssues(t *testing
 }
 
 func TestBoardArgsKeepValuesOutOfTheQuery(t *testing.T) {
-	args := strings.Join(BoardArgs("o", "n; drop"), " ")
+	args := BoardArgs("o", "n; drop")
 
-	if strings.Contains(args[:strings.Index(args, "-f owner")], "drop") {
-		t.Fatalf("name leaked into the query: %s", args)
+	if !slices.Contains(args, "name=n; drop") {
+		t.Fatalf("name is not passed as its own argument: %v", args)
+	}
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "query=") && strings.Contains(arg, "drop") {
+			t.Fatalf("name leaked into the query: %s", arg)
+		}
 	}
 }
 

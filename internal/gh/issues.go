@@ -261,7 +261,7 @@ func DecodeBoard(data []byte) (Board, error) {
 		}
 		for _, item := range node.Items.Nodes {
 			if item.Content.Kind == issueContent {
-				issue := item.Content.rawIssue.decode()
+				issue := item.Content.decode()
 				issue.Fields = decodeFields(item.FieldValues.Nodes)
 				project.Issues = append(project.Issues, issue)
 			}
