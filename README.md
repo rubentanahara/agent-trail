@@ -7,9 +7,9 @@ It reads the transcripts each CLI already writes to disk. Nothing has to be conf
 ```
 ╭ Sessions (12) ──────────────────────────╮╭ Events: Fix login redirect (686) · ● running · busy · auto-scroll ─╮
 │▶ All sessions                    2992 ev ││10-22 21:15:39 claude      user       fix the login redirect          │
-│  ● Fix login redirect        2s ~$14.09  ││10-22 21:15:46 claude      tool       Bash command: make check        │
-│  ◌ Report checks            12m ~$0.0009 ││10-22 21:15:58 claude      result     FAILED exit 2 …                 │
-│  ○ Create Broken.cs          3h    1 req ││10-22 21:16:02 claude      assistant  The build fails because …       │
+│  ● Fix login redirect         2s   $14.09││10-22 21:15:46 claude      tool       Bash command: make check        │
+│  ◌ Report checks             12m   <$0.01││10-22 21:15:58 claude      result     FAILED exit 2 …                 │
+│  ○ Create Broken.cs           3h        —││10-22 21:16:02 claude      assistant  The build fails because …       │
 ╰──────────────────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
 ╭ Session af572da6 ────────────────────────╮╭ Detail (r: raw JSON) ──────────────────────────────────────────────╮
 │State    running · busy · pid 38322       ││2026-10-22 21:15:58 · claude · result                                │
@@ -71,6 +71,8 @@ When stdout is not a terminal it prints the history as plain text and exits.
 | `x` | Sessions pane: delete the selected session and its transcript files, after you confirm with `y`. A session is refused while it is running, while a Codex or Copilot turn is open, or if its transcript changed in the last 2 minutes. Agents are deleted with their parent |
 | `t` | Open or close the stats screen (see below) |
 | `q` | Quit |
+
+The footer lists the keys of the focused pane, then the global ones, and drops hints from the right when the window is narrow.
 
 Mouse: the wheel scrolls the pane under the pointer, a click selects a row.
 
@@ -137,7 +139,7 @@ Output-style tools such as caveman and ponytail record no savings: there is no r
 
 ## What it shows
 
-**Sessions.** One row per session that had activity in the replay window, the most recently active first. Each row shows its state, the time since its last event, and its cost including its agents. The name is the session title the CLI generated or you set, otherwise the first prompt. When following every repository, the row also names the folder the session ran in.
+**Sessions.** One row per session that had activity in the replay window, the most recently active first. Each row shows its state, the time since its last event, and its cost including its agents. The cost is in dollars only, `—` when the model has no price, and red when the session is billed to an API key. The name is the session title the CLI generated or you set, otherwise the first prompt. When following every repository, the row also names the folder the session ran in.
 
 **Agents.** Each Claude Code subagent (a Task or Agent call, foreground or background) gets its own row under the session that started it, named by the description it was given, with its agent type. `●` means it is still running and `✓` that it finished, read from the `.meta.json` Claude Code writes beside each agent transcript. Agents are listed while their session is running or selected, and folded away otherwise. Selecting the session shows its events and every agent's; selecting an agent shows only that agent's. Codex and Copilot CLI record their subagents inside the session transcript, so they stay in the parent row and the `Subagents` field.
 
@@ -148,6 +150,7 @@ Output-style tools such as caveman and ponytail record no savings: there is no r
 | Mark | Meaning | How it is known |
 |---|---|---|
 | `●` | Running, with `busy`, `idle` or `working` when known | Claude Code: `~/.claude/sessions/<pid>.json` names the session and its process is alive. Copilot: the session folder holds `inuse.<pid>.lock` and that process is alive |
+| `◐` | Running and waiting for you: Claude Code is `idle` at its prompt | Same marker as `●`, with `status` `idle`. Shown as `waiting for you`; `/waiting` finds it. Codex and Copilot have no such marker |
 | `○` | Closed, including sessions ended with `ctrl+c` | The marker above is gone or its process is dead |
 | `◌` | Not recorded | Codex keeps no per-session marker on disk. `working` is shown while one of its turns is open |
 
@@ -163,7 +166,7 @@ Output-style tools such as caveman and ponytail record no savings: there is no r
 | Codex | `plan_type` in the rate-limit data: a ChatGPT plan, or none for an API key | Cost per model call and rate-limit use |
 | Copilot | `isByok` on each model call: bring-your-own-key, or the Copilot plan | Premium requests, and cost per model call |
 
-With a subscription the cost is labelled `~$… API-equivalent`: what the same tokens would cost at the provider's API list price. Billed to an API key, it is shown in red.
+In the info box, a subscription cost is labelled `~$… API-equivalent`: what the same tokens would cost at the provider's API list price. Billed to an API key, it is shown in red.
 
 **Prices are not built in.** They come from [LiteLLM's public price list](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) (Anthropic and OpenAI entries only):
 

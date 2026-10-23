@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/rubentanahara/agent-trail/internal/trail"
 )
 
@@ -31,21 +33,23 @@ func (m model) agentsLine(key string) string {
 	return fmt.Sprintf("%d (%d running) · with agents %s", len(agents), running, costLine(m.familySession(key)))
 }
 
-func sessionMetric(session trail.Session) string {
-	if session.CLI == trail.Copilot && session.Billing != trail.BillingAPI && session.PremiumRequests > 0 {
-		return fmt.Sprintf("%g req", session.PremiumRequests)
+func costCell(session trail.Session) string {
+	cost := sessionCost(session)
+	return strings.Repeat(" ", max(0, costColumnWidth-ansi.StringWidth(cost))) + cost
+}
+
+func sessionCost(session trail.Session) string {
+	switch {
+	case session.PricedCalls == 0:
+		return faintStyle.Render(unpricedCost)
+	case session.Billing == trail.BillingAPI:
+		return apiStyle.Render(trail.ShortDollars(session.Tokens.CostUSD))
 	}
-	if session.PricedCalls == 0 {
-		return trail.Tokens(session.Tokens.Output) + " out"
-	}
-	if session.Billing == trail.BillingAPI {
-		return apiStyle.Render(trail.Dollars(session.Tokens.CostUSD) + " API")
-	}
-	return "~" + trail.Dollars(session.Tokens.CostUSD)
+	return trail.ShortDollars(session.Tokens.CostUSD)
 }
 
 func stateLine(session trail.Session) string {
-	activity := optional(" · ", session.Activity)
+	activity := optional(" · ", activityText(session))
 	switch session.Liveness {
 	case trail.LivenessRunning:
 		return runningStyle.Render("running"+activity) + optional(" · pid ", pidText(session.PID))
@@ -140,7 +144,7 @@ func (m model) totalRows() []string {
 		field("Copilot", ifPositive(totals.premium, fmt.Sprintf("%g premium requests", totals.premium))),
 		field("Events", fmt.Sprintf("%d", len(m.events))),
 		field("Prices", m.pricesLine()),
-		field("Legend", strings.TrimSpace(runningGlyph+"running "+closedGlyph+"closed "+unknownGlyph+"not recorded")),
+		field("Legend", strings.TrimSpace(runningGlyph+"running "+waitingGlyph+waitingText+" "+closedGlyph+"closed "+unknownGlyph+"not recorded")),
 	})
 }
 

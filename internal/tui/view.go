@@ -36,6 +36,12 @@ const (
 	closedGlyph          = "○ "
 	unknownGlyph         = "◌ "
 	finishedGlyph        = "✓ "
+	waitingGlyph         = "◐ "
+	idleActivity         = "idle"
+	waitingText          = "waiting for you"
+	unpricedCost         = "—"
+	costColumnWidth      = 8
+	hintSeparator        = "  "
 	middleBranch         = "├ "
 	lastBranch           = "└ "
 	minimumWidth         = 20
@@ -53,6 +59,7 @@ var (
 	faintStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	apiStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("203"))
 	runningStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	waitingStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("226"))
 	selectedStyle = lipgloss.NewStyle().Reverse(true)
 	matchStyle    = lipgloss.NewStyle().Bold(true).Underline(true).Foreground(lipgloss.Color("226"))
 	matchOnSelect = matchStyle.Reverse(true)
@@ -210,9 +217,6 @@ func (m model) sessionsTitle() string {
 	if m.runningOnly {
 		title += promptStyle.Render(" · running only")
 	}
-	if m.focus == sessionsPane {
-		title += faintStyle.Render(" ↑↓ pick · enter events · c continue · x delete")
-	}
 	return title
 }
 
@@ -241,11 +245,11 @@ func (m model) runningCount() int {
 func scopeState(session trail.Session) string {
 	switch session.Liveness {
 	case trail.LivenessRunning:
-		return runningStyle.Render(runningGlyph + "running" + optional(" · ", session.Activity))
+		return runningStyle.Render(runningGlyph + "running" + optional(" · ", activityText(session)))
 	case trail.LivenessClosed:
 		return closedGlyph + "closed, no new events expected"
 	}
-	return unknownGlyph + "last event " + age(session.Last) + " ago" + optional(" · ", session.Activity)
+	return unknownGlyph + "last event " + age(session.Last) + " ago" + optional(" · ", activityText(session))
 }
 
 func age(at time.Time) string {
@@ -302,7 +306,7 @@ func (m model) sessionRows(width, rows int) []string {
 	all := fmt.Sprintf("%sAll sessions", marker(m.activeSession == ""))
 	lines := []string{spread(all, fmt.Sprintf("%d ev", len(m.events)), width)}
 	for row, key := range m.order {
-		lines = append(lines, spread(m.sessionLabelRow(row, key), faintStyle.Render(fmt.Sprintf("%4s ", age(m.familyLast(key))))+sessionMetric(m.familySession(key)), width))
+		lines = append(lines, spread(m.sessionLabelRow(row, key), faintStyle.Render(fmt.Sprintf("%4s ", age(m.familyLast(key))))+costCell(m.familySession(key)), width))
 	}
 	out := make([]string, 0, max(0, rows))
 	for row := m.sessionTop; row < len(lines) && len(out) < rows; row++ {
@@ -319,9 +323,9 @@ func (m model) sessionLabelRow(row int, key string) string {
 	session := m.sessions[key]
 	name := m.sessionQuery.highlight(sessionLabel(session), matchStyle)
 	if !m.isChild(session) {
-		return marker(key == m.activeSession) + cliStyle(session.CLI).Render(stateGlyph(session)) + name + m.projectHint(session)
+		return marker(key == m.activeSession) + glyphStyle(session).Render(stateGlyph(session)) + name + m.projectHint(session)
 	}
-	return marker(key == m.activeSession) + faintStyle.Render(m.branchGlyph(row)) + cliStyle(session.CLI).Render(stateGlyph(session)) + name + faintStyle.Render(" · "+session.Agent)
+	return marker(key == m.activeSession) + faintStyle.Render(m.branchGlyph(row)) + glyphStyle(session).Render(stateGlyph(session)) + name + faintStyle.Render(" · "+session.Agent)
 }
 
 func (m model) branchGlyph(row int) string {
@@ -376,7 +380,28 @@ func shortID(id string) string {
 	return id
 }
 
+func isWaiting(session trail.Session) bool {
+	return session.Liveness == trail.LivenessRunning && session.Activity == idleActivity
+}
+
+func activityText(session trail.Session) string {
+	if isWaiting(session) {
+		return waitingText
+	}
+	return session.Activity
+}
+
+func glyphStyle(session trail.Session) lipgloss.Style {
+	if isWaiting(session) {
+		return waitingStyle
+	}
+	return cliStyle(session.CLI)
+}
+
 func stateGlyph(session trail.Session) string {
+	if isWaiting(session) {
+		return waitingGlyph
+	}
 	if session.Finished && session.Liveness != trail.LivenessRunning {
 		return finishedGlyph
 	}
@@ -468,9 +493,38 @@ func (m model) footer() string {
 	case m.notice != "":
 		return promptStyle.Render(m.notice)
 	}
-	status := faintStyle.Render(strings.Join([]string{"1 2 3/tab panes", "/ filter pane", "c continue session", "z " + zoomAction(m.zoomed), "o running only", "m " + shownOrHidden(m.hideAutomated) + " automated", "t stats", "enter open", "s event's session", "a all", "n " + shownOrHidden(!m.hideNoise) + " noise", "u usage", "r raw", "f follow", "q quit"}, "  "))
+	prefix := ""
 	if text := m.filterText[m.focus]; text != "" {
-		status = promptStyle.Render("filter: "+text+" (esc clears)") + "  " + status
+		prefix = promptStyle.Render("filter: "+text+" (esc clears)") + hintSeparator
 	}
-	return status
+	room := m.width - ansi.StringWidth("agent-trail "+m.context.Version) - 1 - ansi.StringWidth(prefix)
+	return prefix + faintStyle.Render(fitHints(append(m.paneHints(), m.globalHints()...), room))
+}
+
+func fitHints(hints []string, room int) string {
+	for len(hints) > 0 && ansi.StringWidth(strings.Join(hints, hintSeparator)) > room {
+		hints = hints[:len(hints)-1]
+	}
+	return strings.Join(hints, hintSeparator)
+}
+
+func (m model) paneHints() []string {
+	switch m.focus {
+	case sessionsPane:
+		return []string{"↑↓ pick", "enter events", "c continue", "x delete", "o running only", "m " + shownOrHidden(!m.hideAutomated) + " automated", "/ filter", "a all"}
+	case eventsPane:
+		return []string{"↑↓ move", "enter detail", "s event's session", "a all", "n " + shownOrHidden(!m.hideNoise) + " noise", "u usage", "f follow", "/ filter"}
+	}
+	return []string{"↑↓ scroll", "r " + rawOrText(m.raw), "/ filter lines", "esc back"}
+}
+
+func (m model) globalHints() []string {
+	return []string{"tab panes", "z " + zoomAction(m.zoomed), "t stats", "q quit"}
+}
+
+func rawOrText(raw bool) string {
+	if raw {
+		return "text"
+	}
+	return "raw"
 }

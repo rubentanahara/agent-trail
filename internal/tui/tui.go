@@ -526,7 +526,7 @@ func (m *model) applyFilter(target pane, text string) {
 func sessionHaystack(session trail.Session) string {
 	return strings.ToLower(strings.Join([]string{
 		string(session.CLI), session.Name, session.ID, session.Model, session.Agent, strings.Join(session.Subagents, " "),
-		session.Branch, string(session.Liveness), session.Activity, string(session.Billing), session.Plan,
+		session.Branch, string(session.Liveness), activityText(session), string(session.Billing), session.Plan,
 	}, " "))
 }
 

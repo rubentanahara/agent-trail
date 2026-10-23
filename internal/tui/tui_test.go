@@ -356,7 +356,7 @@ func TestAgentsAreListedUnderTheirParentSession(t *testing.T) {
 		t.Fatalf("order = %s", got)
 	}
 	screen := ansi.Strip(m.render())
-	for _, want := range []string{"├ ● Review the code · reviewer", "└ ✓ Find the docs · web-fetch", "$3.00 API"} {
+	for _, want := range []string{"├ ● Review the code · reviewer", "└ ✓ Find the docs · web-fetch", "$3.00"} {
 		if !strings.Contains(screen, want) {
 			t.Fatalf("missing %q:\n%s", want, screen)
 		}
