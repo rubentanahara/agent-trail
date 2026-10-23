@@ -1,17 +1,13 @@
 package savings
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
-
-	"github.com/rubentanahara/agent-trail/internal/trail"
 )
 
 const (
@@ -20,10 +16,7 @@ const (
 	AnyCLI       = "any CLI"
 	rtkDayLayout = "2006-01-02"
 	rtkTimeout   = 10 * time.Second
-	maxLineBytes = 1 << 20
 )
-
-var knownCLIs = []trail.CLI{trail.Claude, trail.Codex, trail.Copilot}
 
 type Saving struct {
 	Tool   string
@@ -31,10 +24,14 @@ type Saving struct {
 	Tokens int64
 	USD    float64
 	HasUSD bool
+	Since  time.Time
 }
 
 func Load(home string, since time.Time) []Saving {
-	found := headroomSavings(filepath.Join(home, ".headroom", "savings_events.jsonl"), since)
+	var found []Saving
+	if saved, ok := headroomTotal(filepath.Join(home, ".headroom", "proxy_savings.json")); ok {
+		found = append(found, saved)
+	}
 	if saved, ok := rtkSavings(since); ok {
 		found = append(found, saved)
 	}
@@ -42,54 +39,29 @@ func Load(home string, since time.Time) []Saving {
 	return found
 }
 
-type headroomEvent struct {
-	Timestamp string  `json:"ts"`
-	Saved     int64   `json:"saved"`
-	CostUSD   float64 `json:"cost_usd"`
-	Client    string  `json:"client"`
+type headroomSummary struct {
+	Lifetime struct {
+		TokensSaved int64   `json:"tokens_saved"`
+		SavingsUSD  float64 `json:"compression_savings_usd"`
+	} `json:"lifetime"`
+	Metrics struct {
+		StartedAt time.Time `json:"started_at"`
+	} `json:"lifetime_metrics"`
 }
 
-func headroomSavings(path string, since time.Time) []Saving {
-	file, err := os.Open(path)
+func headroomTotal(path string) (Saving, bool) {
+	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil
+		return Saving{}, false
 	}
-	defer file.Close()
-	byCLI := map[string]*Saving{}
-	var order []string
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 0, maxLineBytes), maxLineBytes)
-	for scanner.Scan() {
-		var event headroomEvent
-		if json.Unmarshal(scanner.Bytes(), &event) != nil {
-			continue
-		}
-		at, err := time.Parse(time.RFC3339Nano, event.Timestamp)
-		if err != nil || at.Before(since) {
-			continue
-		}
-		cli := cliOf(event.Client)
-		if byCLI[cli] == nil {
-			byCLI[cli] = &Saving{Tool: Headroom, CLI: cli, HasUSD: true}
-			order = append(order, cli)
-		}
-		byCLI[cli].Tokens += event.Saved
-		byCLI[cli].USD += event.CostUSD
+	var summary headroomSummary
+	if json.Unmarshal(raw, &summary) != nil {
+		return Saving{}, false
 	}
-	out := make([]Saving, 0, len(order))
-	for _, cli := range order {
-		out = append(out, *byCLI[cli])
-	}
-	return out
-}
-
-func cliOf(client string) string {
-	for _, cli := range knownCLIs {
-		if strings.Contains(client, string(cli)) {
-			return string(cli)
-		}
-	}
-	return client
+	return Saving{
+		Tool: Headroom, CLI: AnyCLI, Since: summary.Metrics.StartedAt,
+		Tokens: summary.Lifetime.TokensSaved, USD: summary.Lifetime.SavingsUSD, HasUSD: true,
+	}, true
 }
 
 type rtkReport struct {

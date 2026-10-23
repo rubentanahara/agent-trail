@@ -125,8 +125,10 @@ Only tools that write down what they saved appear, with their own figures:
 
 | Tool | Read from | Per CLI |
 |---|---|---|
-| [Headroom](https://github.com/headroomlabs-ai/headroom) | `~/.headroom/savings_events.jsonl`: tokens removed from each proxied request and Headroom's dollar estimate | Yes, from the `client` field |
-| [RTK](https://github.com/rtk-ai/rtk) | `rtk gain --daily --format json`: tokens removed from command output | No. RTK does not record which CLI ran a command, so it shows as `any CLI` |
+| [Headroom](https://github.com/headroomlabs-ai/headroom) | `~/.headroom/proxy_savings.json`: Headroom's lifetime total of tokens its compression saved and its dollar estimate, since the date it started counting | No. The summary is not split by client, so it shows as `any CLI` |
+| [RTK](https://github.com/rtk-ai/rtk) | `rtk gain --daily --format json`: tokens removed from command output within the stats window | No. RTK does not record which CLI ran a command, so it shows as `any CLI` |
+
+Headroom's total covers its whole history, not the stats window, because its summary keeps too few snapshots to cut a 30-day slice. Its per-request event log does name the client, but it adds up to about ten times the summary, so it is not used.
 
 Output-style tools such as caveman and ponytail record no savings: there is no run without them to compare with, and their own documentation says so. They are not shown.
 

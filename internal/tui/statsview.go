@@ -10,7 +10,6 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/rubentanahara/agent-trail/internal/savings"
 	"github.com/rubentanahara/agent-trail/internal/stats"
 	"github.com/rubentanahara/agent-trail/internal/trail"
 )
@@ -85,19 +84,15 @@ func (m model) savingsRows(width int) []string {
 	var rows []barRow
 	for _, saving := range m.savings {
 		note := trail.Tokens(saving.Tokens) + " tokens"
+		if !saving.Since.IsZero() {
+			note += " since " + saving.Since.Local().Format(time.DateOnly)
+		}
 		if saving.HasUSD {
 			note += " · " + trail.Dollars(saving.USD) + " by " + saving.Tool + "'s count"
 		}
-		rows = append(rows, barRow{label: saving.Tool + " · " + saving.CLI, style: savingStyle(saving), value: float64(saving.Tokens), note: note})
+		rows = append(rows, barRow{label: saving.Tool + " · " + saving.CLI, style: lipgloss.NewStyle(), value: float64(saving.Tokens), note: note})
 	}
 	return bars(rows, width)
-}
-
-func savingStyle(saving savings.Saving) lipgloss.Style {
-	if saving.CLI == savings.AnyCLI {
-		return lipgloss.NewStyle()
-	}
-	return cliStyle(trail.CLI(saving.CLI))
 }
 
 func (m model) statsPlaceholder() []string {

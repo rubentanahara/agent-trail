@@ -3,32 +3,25 @@ package savings
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 )
 
 var since = time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 
-func TestHeadroomSavingsAreSummedPerCLIWithinTheWindow(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "savings_events.jsonl")
-	lines := []string{
-		`{"ts":"2026-09-30T23:59:59+00:00","saved":1000,"cost_usd":1,"client":"claude-code"}`,
-		`{"ts":"2026-10-02T10:00:00.5+00:00","saved":30,"cost_usd":0.25,"client":"claude-code"}`,
-		`{"ts":"2026-10-02T11:00:00+00:00","saved":20,"cost_usd":0.25,"client":"claude"}`,
-		`{"ts":"2026-10-03T11:00:00+00:00","saved":7,"cost_usd":0.1,"client":"cursor"}`,
-		`not json`,
-	}
-	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o600); err != nil {
+func TestHeadroomShowsItsLifetimeSummary(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "proxy_savings.json")
+	summary := `{"lifetime":{"tokens_saved":101565249,"compression_savings_usd":3824.5},"lifetime_metrics":{"started_at":"2026-08-01T16:44:15Z"},"history":[]}`
+	if err := os.WriteFile(path, []byte(summary), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got := headroomSavings(path, since)
-	want := []Saving{
-		{Tool: Headroom, CLI: "claude", Tokens: 50, USD: 0.5, HasUSD: true},
-		{Tool: Headroom, CLI: "cursor", Tokens: 7, USD: 0.1, HasUSD: true},
+	got, ok := headroomTotal(path)
+	want := Saving{Tool: Headroom, CLI: AnyCLI, Tokens: 101565249, USD: 3824.5, HasUSD: true, Since: time.Date(2026, 8, 1, 16, 44, 15, 0, time.UTC)}
+	if !ok || got != want {
+		t.Fatalf("got %+v ok=%v", got, ok)
 	}
-	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
-		t.Fatalf("got %+v", got)
+	if _, ok := headroomTotal(filepath.Join(t.TempDir(), "missing.json")); ok {
+		t.Fatal("missing file reported savings")
 	}
 }
 

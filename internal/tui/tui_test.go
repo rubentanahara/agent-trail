@@ -316,12 +316,12 @@ func TestStatsShowsSavingsAndTogglesAutomatedSessions(t *testing.T) {
 	batch.Sessions[1].Automated = true
 	m := sized(newModel(nil, sampleBatch(), Context{Repo: "/repo"}), 160, 40)
 	m = press(m, "t")
-	for _, msg := range []tea.Msg{statsMsg{batch}, savingsMsg{[]savings.Saving{{Tool: "headroom", CLI: "claude", Tokens: 2_000_000, USD: 3, HasUSD: true}}}} {
+	for _, msg := range []tea.Msg{statsMsg{batch}, savingsMsg{[]savings.Saving{{Tool: "headroom", CLI: savings.AnyCLI, Tokens: 2_000_000, USD: 3, HasUSD: true, Since: time.Date(2026, 8, 1, 12, 0, 0, 0, time.Local)}}}} {
 		updated, _ := m.Update(msg)
 		m = updated.(model)
 	}
 	screen := ansi.Strip(m.render())
-	if !strings.Contains(screen, "headroom · claude") || !strings.Contains(screen, "2.0M tokens · $3.00 by headroom's count") {
+	if !strings.Contains(screen, "headroom · any CLI") || !strings.Contains(screen, "2.0M tokens since 2026-08-01 · $3.00 by headroom's count") {
 		t.Fatalf("savings missing:\n%s", screen)
 	}
 	if !strings.Contains(screen, "1 automated sessions hidden") || strings.Contains(screen, "codex ") {
