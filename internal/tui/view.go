@@ -263,8 +263,9 @@ func age(at time.Time) string {
 
 func (m model) eventRows(width, rows int) []string {
 	out := make([]string, 0, max(0, rows))
+	ledger := m.turns()
 	for row := m.eventTop; row < len(m.visible) && len(out) < rows; row++ {
-		event := m.events[m.visible[row]]
+		event := ledger.withCost(m.events[m.visible[row]])
 		stamp := event.Time.Local().Format(timeLayout) + " "
 		if row == m.eventCursor {
 			body := selectedStyle.Render(fit(plainEventBody(event), width-len(stamp)))

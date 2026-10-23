@@ -153,6 +153,8 @@ Output-style tools such as caveman and ponytail record no savings: there is no r
 
 **Per session:** state, agent, subagents, model, git branch, permission mode, billing, active time, tokens in (with cache reads and writes), tokens out (with reasoning), cost, rate-limit and context use, lines added and removed, number of model calls.
 
+**Prompt cost.** Each prompt row starts with what its turn cost: the priced model calls from that prompt to the next one in the same session, agents included. `$1.23+` means some calls in the turn had no price. Prompts with no priced call show nothing. The session's `Turns` field gives the prompt count and the costliest prompt.
+
 ## Cost and billing
 
 | | Billing detected from | Shown |

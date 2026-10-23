@@ -89,6 +89,7 @@ func (m model) infoRows() []string {
 		field("Active", activeSpan(session)),
 		field("Tokens", tokenLine(session.Tokens)),
 		field("Cost", costLine(session)),
+		field("Turns", m.turns().line(session.Key)),
 		field("Reported", reportedLine(session)),
 		field("Limits", limitsLine(session)),
 		field("Lines", linesLine(session)),
