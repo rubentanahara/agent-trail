@@ -308,3 +308,24 @@ func TestToolCallsRecordTheFilesTheyTouch(t *testing.T) {
 		t.Fatalf("events = %+v", events)
 	}
 }
+
+func TestSessionsStartedByAProgramAreMarkedAutomated(t *testing.T) {
+	f := newFixture(t)
+	f.write(claudeDir+"sdk.jsonl", `{"type":"user","entrypoint":"sdk-ts","cwd":"`+testRepo+`","timestamp":"`+stampNow+`","message":{"content":"x"}}`)
+	f.write(claudeDir+"cli.jsonl", `{"type":"user","entrypoint":"cli","cwd":"`+testRepo+`","timestamp":"`+stampNow+`","message":{"content":"x"}}`)
+	f.write(codexDir+"rollout-e-00000000-0000-0000-0000-000000000005.jsonl", `{"timestamp":"`+stampNow+`","type":"session_meta","payload":{"cwd":"`+testRepo+`","source":"exec"}}`)
+	f.write(codexDir+"rollout-v-00000000-0000-0000-0000-000000000006.jsonl", `{"timestamp":"`+stampNow+`","type":"session_meta","payload":{"cwd":"`+testRepo+`","source":"vscode"}}`)
+	automated := map[string]bool{}
+	for _, session := range New(f.home, testRepo, pricing.Table{}).Start(time.Time{}).Sessions {
+		automated[session.Key] = session.Automated
+	}
+	want := map[string]bool{
+		"claude:sdk": true, "claude:cli": false,
+		"codex:00000000-0000-0000-0000-000000000005": true, "codex:00000000-0000-0000-0000-000000000006": false,
+	}
+	for key, value := range want {
+		if automated[key] != value {
+			t.Errorf("%s automated = %v, want %v (all: %v)", key, automated[key], value, automated)
+		}
+	}
+}

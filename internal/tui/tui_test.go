@@ -9,6 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/rubentanahara/agent-trail/internal/savings"
 	"github.com/rubentanahara/agent-trail/internal/trail"
 )
 
@@ -307,5 +308,26 @@ func TestVersionSitsInTheBottomRightCorner(t *testing.T) {
 		if last := lines[len(lines)-1]; !strings.HasSuffix(last, " agent-trail 1.2.3") || ansi.StringWidth(last) != 120 {
 			t.Fatalf("screen %q footer = %q", screen, last)
 		}
+	}
+}
+
+func TestStatsShowsSavingsAndTogglesAutomatedSessions(t *testing.T) {
+	batch := sampleBatch()
+	batch.Sessions[1].Automated = true
+	m := sized(newModel(nil, sampleBatch(), Context{Repo: "/repo"}), 160, 40)
+	m = press(m, "t")
+	for _, msg := range []tea.Msg{statsMsg{batch}, savingsMsg{[]savings.Saving{{Tool: "headroom", CLI: "claude", Tokens: 2_000_000, USD: 3, HasUSD: true}}}} {
+		updated, _ := m.Update(msg)
+		m = updated.(model)
+	}
+	screen := ansi.Strip(m.render())
+	if !strings.Contains(screen, "headroom · claude") || !strings.Contains(screen, "2.0M tokens · $3.00 by headroom's count") {
+		t.Fatalf("savings missing:\n%s", screen)
+	}
+	if !strings.Contains(screen, "1 automated sessions hidden") || strings.Contains(screen, "codex ") {
+		t.Fatalf("automated session not hidden:\n%s", screen)
+	}
+	if screen = ansi.Strip(press(m, "a").render()); strings.Contains(screen, "automated sessions hidden") || !strings.Contains(screen, "codex ") {
+		t.Fatalf("a did not show automated sessions:\n%s", screen)
 	}
 }

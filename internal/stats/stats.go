@@ -62,11 +62,13 @@ type PeriodSpend struct {
 }
 
 type Stats struct {
+	ShowAutomated bool
+
 	since      time.Time
 	sessions   map[string]trail.Session
 	perSession map[string]*Totals
-	extensions map[string]int
-	spend      map[int64]float64
+	extensions map[string]map[string]int
+	spend      map[string]map[int64]float64
 	roots      map[string]string
 }
 
@@ -75,10 +77,24 @@ func New(since time.Time) *Stats {
 		since:      since,
 		sessions:   map[string]trail.Session{},
 		perSession: map[string]*Totals{},
-		extensions: map[string]int{},
-		spend:      map[int64]float64{},
+		extensions: map[string]map[string]int{},
+		spend:      map[string]map[int64]float64{},
 		roots:      map[string]string{},
 	}
+}
+
+func (s *Stats) included(key string) bool {
+	return s.ShowAutomated || !s.sessions[key].Automated
+}
+
+func (s *Stats) AutomatedSessions() int {
+	count := 0
+	for key := range s.perSession {
+		if s.sessions[key].Automated {
+			count++
+		}
+	}
+	return count
 }
 
 func (s *Stats) Add(batch trail.Batch) {
@@ -101,7 +117,7 @@ func (s *Stats) addEvent(event trail.Event) {
 	}
 	for _, file := range event.Files {
 		if extension := strings.ToLower(filepath.Ext(file)); extension != "" {
-			s.extensions[extension]++
+			addTo(s.extensions, event.Session, extension, 1)
 		}
 	}
 	usage := event.Usage
@@ -114,14 +130,36 @@ func (s *Stats) addEvent(event trail.Event) {
 	totals.Output += usage.Output
 	if usage.Priced {
 		totals.CostUSD += usage.CostUSD
-		s.spend[event.Time.Unix()/secondsPerMin] += usage.CostUSD
+		addTo(s.spend, event.Session, event.Time.Unix()/secondsPerMin, usage.CostUSD)
 	}
+}
+
+func addTo[K comparable, V int | float64](perSession map[string]map[K]V, session string, key K, amount V) {
+	if perSession[session] == nil {
+		perSession[session] = map[K]V{}
+	}
+	perSession[session][key] += amount
+}
+
+func (s *Stats) spentPerMinute() map[int64]float64 {
+	merged := map[int64]float64{}
+	for session, minutes := range s.spend {
+		if !s.included(session) {
+			continue
+		}
+		for minute, cost := range minutes {
+			merged[minute] += cost
+		}
+	}
+	return merged
 }
 
 func (s *Stats) Overall() Totals {
 	var overall Totals
-	for _, totals := range s.perSession {
-		overall.add(*totals)
+	for key, totals := range s.perSession {
+		if s.included(key) {
+			overall.add(*totals)
+		}
 	}
 	return overall
 }
@@ -137,6 +175,9 @@ func (s *Stats) ByProject() []Row {
 func (s *Stats) group(label func(trail.Session) string) []Row {
 	byLabel := map[string]*Row{}
 	for key, totals := range s.perSession {
+		if !s.included(key) {
+			continue
+		}
 		name := label(s.sessions[key])
 		row := byLabel[name]
 		if row == nil {
@@ -182,8 +223,17 @@ func gitRoot(cwd string) string {
 }
 
 func (s *Stats) Extensions() []Count {
-	counts := make([]Count, 0, len(s.extensions))
-	for extension, n := range s.extensions {
+	merged := map[string]int{}
+	for session, extensions := range s.extensions {
+		if !s.included(session) {
+			continue
+		}
+		for extension, n := range extensions {
+			merged[extension] += n
+		}
+	}
+	counts := make([]Count, 0, len(merged))
+	for extension, n := range merged {
 		counts = append(counts, Count{Label: extension, N: n})
 	}
 	sort.Slice(counts, func(i, j int) bool {
@@ -197,7 +247,7 @@ func (s *Stats) Extensions() []Count {
 
 func (s *Stats) Series(now time.Time, step time.Duration, count int) []float64 {
 	values := make([]float64, count)
-	for minute, cost := range s.spend {
+	for minute, cost := range s.spentPerMinute() {
 		back := int(now.Sub(time.Unix(minute*secondsPerMin, 0)) / step)
 		if back >= 0 && back < count {
 			values[count-1-back] += cost
@@ -207,8 +257,9 @@ func (s *Stats) Series(now time.Time, step time.Duration, count int) []float64 {
 }
 
 func (s *Stats) Spend(now time.Time) []PeriodSpend {
-	window := now.Sub(s.windowStart())
-	total := s.spentSince(time.Time{})
+	spend := s.spentPerMinute()
+	window := now.Sub(s.windowStart(spend))
+	total := spentSince(spend, time.Time{})
 	periods := []struct {
 		name   string
 		start  time.Time
@@ -226,17 +277,17 @@ func (s *Stats) Spend(now time.Time) []PeriodSpend {
 		if window > 0 {
 			average = total * float64(period.length) / float64(window)
 		}
-		out = append(out, PeriodSpend{Name: period.name, Current: s.spentSince(period.start), Average: average})
+		out = append(out, PeriodSpend{Name: period.name, Current: spentSince(spend, period.start), Average: average})
 	}
 	return out
 }
 
-func (s *Stats) windowStart() time.Time {
+func (s *Stats) windowStart(spend map[int64]float64) time.Time {
 	if !s.since.IsZero() {
 		return s.since
 	}
 	earliest := time.Time{}
-	for minute := range s.spend {
+	for minute := range spend {
 		at := time.Unix(minute*secondsPerMin, 0)
 		if earliest.IsZero() || at.Before(earliest) {
 			earliest = at
@@ -245,9 +296,9 @@ func (s *Stats) windowStart() time.Time {
 	return earliest
 }
 
-func (s *Stats) spentSince(start time.Time) float64 {
+func spentSince(spend map[int64]float64, start time.Time) float64 {
 	total := 0.0
-	for minute, cost := range s.spend {
+	for minute, cost := range spend {
 		if !time.Unix(minute*secondsPerMin, 0).Before(start.Truncate(time.Minute)) {
 			total += cost
 		}

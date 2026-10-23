@@ -102,6 +102,7 @@ type Session struct {
 	Model        string
 	Branch       string
 	Cwd          string
+	Automated    bool
 	Permission   string
 	Billing      Billing
 	Plan         string

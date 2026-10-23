@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/rubentanahara/agent-trail/internal/savings"
 	"github.com/rubentanahara/agent-trail/internal/stats"
 	"github.com/rubentanahara/agent-trail/internal/trail"
 )
@@ -38,15 +39,21 @@ type barRow struct {
 
 func (m model) renderStats() string {
 	bodyH := m.height - footerHeight - headerHeight
-	footer := m.footerLine(faintStyle.Render("t/esc back to the trail  q quit"))
 	if m.stats == nil {
+		footer := m.footerLine(faintStyle.Render("t/esc back to the trail  q quit"))
 		return lipgloss.JoinVertical(lipgloss.Left, fit(m.statsHeader(), m.width), box("Stats", m.statsPlaceholder(), m.width, bodyH, true), footer)
 	}
+	footer := m.footerLine(faintStyle.Render("t/esc back to the trail  a " + shownOrHidden(!m.stats.ShowAutomated) + " automated sessions  q quit"))
 	leftW, topH := m.width/2, bodyH/2
 	rightW, bottomH := m.width-leftW, bodyH-topH
+	cliH := topH / 2
 	now := time.Now()
+	left := stack(
+		box("Which CLI you use most (prompts)", m.cliRows(leftW-2), leftW, cliH, false),
+		box("Tokens your tools saved, as they record it", m.savingsRows(leftW-2), leftW, topH-cliH, false),
+	)
 	top := lipgloss.JoinHorizontal(lipgloss.Top,
-		box("Which CLI you use most (prompts)", m.cliRows(leftW-2), leftW, topH, false),
+		left,
 		box("Which project you work on most (prompts)", m.projectRows(rightW-2), rightW, topH, false),
 	)
 	bottom := lipgloss.JoinHorizontal(lipgloss.Top,
@@ -61,7 +68,36 @@ func (m model) statsHeader() string {
 	if !m.context.StatsSince.IsZero() {
 		since = "since " + m.context.StatsSince.Local().Format("2006-01-02")
 	}
-	return titleStyle.Render("Stats") + faintStyle.Render(" · every repository · "+since+" · subscription costs are API-equivalent")
+	return titleStyle.Render("Stats") + faintStyle.Render(" · every repository · "+since+" · subscription costs are API-equivalent"+m.automatedNote())
+}
+
+func (m model) automatedNote() string {
+	if m.stats == nil || m.stats.ShowAutomated {
+		return ""
+	}
+	return fmt.Sprintf(" · %d automated sessions hidden", m.stats.AutomatedSessions())
+}
+
+func (m model) savingsRows(width int) []string {
+	if len(m.savings) == 0 {
+		return []string{faintStyle.Render("no RTK or Headroom savings recorded")}
+	}
+	var rows []barRow
+	for _, saving := range m.savings {
+		note := trail.Tokens(saving.Tokens) + " tokens"
+		if saving.HasUSD {
+			note += " · " + trail.Dollars(saving.USD) + " by " + saving.Tool + "'s count"
+		}
+		rows = append(rows, barRow{label: saving.Tool + " · " + saving.CLI, style: savingStyle(saving), value: float64(saving.Tokens), note: note})
+	}
+	return bars(rows, width)
+}
+
+func savingStyle(saving savings.Saving) lipgloss.Style {
+	if saving.CLI == savings.AnyCLI {
+		return lipgloss.NewStyle()
+	}
+	return cliStyle(trail.CLI(saving.CLI))
 }
 
 func (m model) statsPlaceholder() []string {

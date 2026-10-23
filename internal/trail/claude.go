@@ -20,6 +20,7 @@ const (
 	claudeQueuedCommand  = "queued_command"
 	claudeHumanOrigin    = "human"
 	claudeSpeedFast      = "fast"
+	claudeSDKEntrypoint  = "sdk"
 	claudeCommandPrefix  = "<command-name>"
 	claudeBashPrefix     = "<bash-input>"
 	claudeInjectedPrefix = "<"
@@ -44,6 +45,7 @@ type claudeEntry struct {
 	Attachment     *claudeAttachment  `json:"attachment"`
 	Message        *claudeMessage     `json:"message"`
 	Cwd            string             `json:"cwd"`
+	Entrypoint     string             `json:"entrypoint"`
 	GitBranch      string             `json:"gitBranch"`
 	PermissionMode string             `json:"permissionMode"`
 	AgentSetting   string             `json:"agentSetting"`
@@ -206,6 +208,9 @@ func (p *claudeParser) updateSession(entry claudeEntry, session *Session) {
 	}
 	if entry.GitBranch != "" {
 		session.Branch = entry.GitBranch
+	}
+	if strings.HasPrefix(entry.Entrypoint, claudeSDKEntrypoint) {
+		session.Automated = true
 	}
 	if entry.Type == "assistant" && p.agent == "" && entry.Message != nil && entry.Message.Model != "" {
 		session.Model = entry.Message.Model

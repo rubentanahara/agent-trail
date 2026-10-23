@@ -123,7 +123,7 @@ func run(opts options) error {
 		return printHistory(os.Stdout, history.Events)
 	}
 	return tui.Run(follower, history, tui.Context{
-		Repo: repo, Version: buildVersion(), PricesAsOf: prices.FetchedAt, PriceWarning: status.Warning,
+		Repo: repo, Home: home, Version: buildVersion(), PricesAsOf: prices.FetchedAt, PriceWarning: status.Warning,
 		Everywhere: trail.New(home, "", prices), StatsSince: statsSince(opts.all, cutoff),
 	})
 }

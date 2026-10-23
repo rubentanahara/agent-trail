@@ -64,3 +64,20 @@ func TestSpendIsBucketedByPeriod(t *testing.T) {
 		t.Fatalf("month = %+v", spend[4])
 	}
 }
+
+func TestAutomatedSessionsAreHiddenUntilShown(t *testing.T) {
+	batch := sample(t.TempDir())
+	batch.Sessions[1].Automated = true
+	s := New(now.AddDate(0, 0, -30))
+	s.Add(batch)
+	if rows := s.ByCLI(); len(rows) != 1 || rows[0].Label != "claude" || s.Overall().CostUSD != 3 || s.AutomatedSessions() != 1 {
+		t.Fatalf("hidden: rows = %+v overall = %+v", rows, s.Overall())
+	}
+	if spend := s.Spend(now); spend[4].Current != 3 {
+		t.Fatalf("hidden month spend = %v", spend[4].Current)
+	}
+	s.ShowAutomated = true
+	if rows := s.ByCLI(); len(rows) != 2 || s.Overall().CostUSD != 8 {
+		t.Fatalf("shown: rows = %+v", rows)
+	}
+}

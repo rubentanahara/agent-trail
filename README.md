@@ -113,8 +113,22 @@ The deletion is permanent; nothing goes to the trash.
 | Which project you work on most | Prompts per git repository, found from each session's working directory |
 | Which file types the agents touch | Tool calls that name a file (`file_path`, `notebook_path`, `path`, Codex file changes), by extension |
 | Spend | Cost of the current minute, hour, day, week and month, the average per period over the window, and bars for the last 60 minutes, 24 hours and 30 days |
+| Tokens your tools saved | Savings that token-saving tools record about themselves (see below) |
 
 Costs use API list prices, so subscription usage is an API-equivalent figure.
+
+Sessions started by a program rather than typed in the interactive CLI are hidden at start, and the header says how many. `a` shows or hides them. Claude Code marks them with an `sdk-*` entrypoint (`claude -p`, the Agent SDK, tools such as claude-mem's observer); Codex marks them with the `exec` source (`codex exec`). Copilot CLI records no such marker, so its sessions are always shown.
+
+#### Token savings
+
+Only tools that write down what they saved appear, with their own figures:
+
+| Tool | Read from | Per CLI |
+|---|---|---|
+| [Headroom](https://github.com/headroomlabs-ai/headroom) | `~/.headroom/savings_events.jsonl`: tokens removed from each proxied request and Headroom's dollar estimate | Yes, from the `client` field |
+| [RTK](https://github.com/rtk-ai/rtk) | `rtk gain --daily --format json`: tokens removed from command output | No. RTK does not record which CLI ran a command, so it shows as `any CLI` |
+
+Output-style tools such as caveman and ponytail record no savings: there is no run without them to compare with, and their own documentation says so. They are not shown.
 
 ## What it shows
 

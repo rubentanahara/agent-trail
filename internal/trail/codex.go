@@ -15,6 +15,7 @@ import (
 const (
 	codexIDLength       = 36
 	codexUserThread     = "user"
+	codexExecSource     = "exec"
 	percentScale        = 100
 	codexRolloutPattern = "rollout-*.jsonl"
 )
@@ -40,6 +41,7 @@ type codexPayload struct {
 	CLIVersion     string          `json:"cli_version"`
 	Cwd            string          `json:"cwd"`
 	ThreadSource   string          `json:"thread_source"`
+	Source         json.RawMessage `json:"source"`
 	Git            *codexGit       `json:"git"`
 	Model          string          `json:"model"`
 	ApprovalPolicy string          `json:"approval_policy"`
@@ -157,6 +159,7 @@ func (p *codexParser) updateSession(recordType string, payload codexPayload, ses
 		if payload.ThreadSource != "" && payload.ThreadSource != codexUserThread {
 			session.Agent = payload.ThreadSource
 		}
+		session.Automated = rawText(payload.Source) == codexExecSource
 	case "turn_context":
 		p.model = payload.Model
 		session.Model = payload.Model

@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/rubentanahara/agent-trail/internal/savings"
 	"github.com/rubentanahara/agent-trail/internal/stats"
 	"github.com/rubentanahara/agent-trail/internal/trail"
 )
@@ -50,8 +51,11 @@ type deletedMsg struct {
 
 type statsMsg struct{ batch trail.Batch }
 
+type savingsMsg struct{ found []savings.Saving }
+
 type Context struct {
 	Repo         string
+	Home         string
 	Version      string
 	PricesAsOf   string
 	PriceWarning string
@@ -103,6 +107,7 @@ type model struct {
 	showStats    bool
 	stats        *stats.Stats
 	statsLoading bool
+	savings      []savings.Saving
 
 	width  int
 	height int
@@ -189,6 +194,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, tick())
 	case statsMsg:
 		m.absorbStats(msg.batch)
+	case savingsMsg:
+		m.savings = msg.found
 	case deletedMsg:
 		m.finishDelete(msg)
 	case detailMsg:
@@ -627,12 +634,14 @@ func (m *model) forgetSession(key string) {
 
 func (m *model) openStats() tea.Cmd {
 	m.showStats = true
+	home, since := m.context.Home, m.context.StatsSince
+	loadSavings := func() tea.Msg { return savingsMsg{savings.Load(home, since)} }
 	if m.stats != nil || m.statsLoading || m.context.Everywhere == nil {
-		return nil
+		return loadSavings
 	}
 	m.statsLoading = true
-	everywhere, since := m.context.Everywhere, m.context.StatsSince
-	return func() tea.Msg { return statsMsg{everywhere.Start(since)} }
+	everywhere := m.context.Everywhere
+	return tea.Batch(loadSavings, func() tea.Msg { return statsMsg{everywhere.Start(since)} })
 }
 
 func (m *model) statsKey(key string) (tea.Cmd, bool) {
@@ -641,6 +650,10 @@ func (m *model) statsKey(key string) (tea.Cmd, bool) {
 		return nil, true
 	case "t", "esc":
 		m.showStats = false
+	case "a":
+		if m.stats != nil {
+			m.stats.ShowAutomated = !m.stats.ShowAutomated
+		}
 	}
 	return nil, false
 }
