@@ -109,6 +109,9 @@ func (t *Trail) Poll() Batch {
 	for _, path := range t.discover() {
 		events = append(events, t.read(path, t.transcripts[path])...)
 	}
+	for _, key := range t.shrunkSessions() {
+		events = append(events, t.reread(key)...)
+	}
 	for path, file := range t.transcripts {
 		size := fileSize(path)
 		switch {
@@ -116,10 +119,6 @@ func (t *Trail) Poll() Batch {
 			file.parked, file.hideBefore = false, file.parkedSize
 			events = append(events, t.read(path, file)...)
 		case file.parked:
-		case size >= 0 && size < file.offset:
-			file.offset, file.hideBefore, file.parser = 0, 0, newParsers[file.source.cli](path)
-			t.resetSession(file, path)
-			events = append(events, t.read(path, file)...)
 		case size > file.offset:
 			events = append(events, t.read(path, file)...)
 		}
@@ -203,6 +202,40 @@ func (t *Trail) finish(events []Event) Batch {
 	}
 	t.rewritten = map[string]bool{}
 	return batch
+}
+
+func (t *Trail) shrunkSessions() []string {
+	var keys []string
+	for path, file := range t.transcripts {
+		size := fileSize(path)
+		if !file.parked && size >= 0 && size < file.offset && !slices.Contains(keys, file.sessionKey) {
+			keys = append(keys, file.sessionKey)
+		}
+	}
+	return keys
+}
+
+func (t *Trail) reread(key string) []Event {
+	paths := t.readPathsOf(key)
+	t.resetSession(t.transcripts[paths[0]], paths[0])
+	var events []Event
+	for _, path := range paths {
+		file := t.transcripts[path]
+		file.offset, file.hideBefore, file.parser = 0, 0, newParsers[file.source.cli](path)
+		events = append(events, t.read(path, file)...)
+	}
+	return events
+}
+
+func (t *Trail) readPathsOf(key string) []string {
+	var paths []string
+	for path, file := range t.transcripts {
+		if file.sessionKey == key && !file.parked {
+			paths = append(paths, path)
+		}
+	}
+	slices.Sort(paths)
+	return paths
 }
 
 func (t *Trail) resetSession(file *transcript, path string) {
@@ -340,7 +373,7 @@ func (t *Trail) updateClaudeContext(cli CLI, usage Usage, session *Session) {
 		return
 	}
 	session.ContextPercent = percentScale * float64(usage.Input) / float64(limit)
-	session.HasContext = true
+	session.HasContext = usage.Input <= limit
 }
 
 func unparsed(line []byte, cli CLI, cause error) []Event {
