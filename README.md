@@ -167,6 +167,8 @@ When a top-level session starts waiting for you while agent-trail runs (Claude C
 
 **Prompt cost.** Each prompt row starts with what its turn cost: the priced model calls from that prompt to the next one in the same session, agents included. `$1.23+` means some calls in the turn had no price. Prompts with no priced call show nothing. The session's `Turns` field gives the prompt count and the costliest prompt.
 
+**Claude usage windows.** On a subscription the 5-hour and 7-day windows are the real limit. They show as a `Claude` row in Totals and at the start of a Claude session's `Limits` line, with the reset time and the age of the figures. They come from the usage Claude Code caches in `~/.claude.json`, or from a statusline-fed file such as the one abtop writes (`~/.claude/abtop-rate-limits.json`); whichever is newer is shown. Claude Code refreshes its own cache only occasionally, so the age matters. Nothing is shown when neither exists.
+
 ## Cost and billing
 
 | | Billing detected from | Shown |

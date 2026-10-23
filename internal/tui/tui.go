@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/rubentanahara/agent-trail/internal/limits"
 	"github.com/rubentanahara/agent-trail/internal/savings"
 	"github.com/rubentanahara/agent-trail/internal/trail"
 )
@@ -110,6 +111,9 @@ type model struct {
 
 	statsScreen statsScreen
 
+	claudeLimits    limits.Claude
+	hasClaudeLimits bool
+
 	width  int
 	height int
 }
@@ -202,9 +206,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		m.refreshDetail()
 	case pollMsg:
-		return m, tea.Batch(m.poll(), m.statsScreen.poll(m.context.Everywhere))
+		return m, tea.Batch(m.poll(), m.statsScreen.poll(m.context.Everywhere), pollLimits(m.context.Home))
 	case batchMsg:
 		cmds = append(cmds, m.absorbPolled(msg.batch), tick())
+	case limitsMsg:
+		m.claudeLimits, m.hasClaudeLimits = msg.claude, msg.found
 	case statsMsg:
 		m.statsScreen.absorb(msg.batch)
 	case savingsMsg:
