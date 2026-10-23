@@ -1,0 +1,96 @@
+{
+ "additions": 1972,
+ "author": {
+  "id": "MDQ6VXNlcjE2MTE1MTA=",
+  "is_bot": false,
+  "login": "williammartin",
+  "name": "William Martin"
+ },
+ "baseRefName": "trunk",
+ "body": "<!--\nThank you for contributing to GitHub CLI!\n\nIf you are proposing a fix for a security issue, STOP and follow .github/SECURITY.md instead.\n\nKeep the entire pull request self-contained, reviewer-facing, and diegetic: describe the\nchange, rationale, and evidence within the context of the repository and pull request. Do not\nnarrate how the pull request was produced or refer to private conversation",
+ "comments": [],
+ "deletions": 38,
+ "files": [
+  {
+   "path": "docs/api-and-hosts.md",
+   "additions": 89,
+   "deletions": 0,
+   "changeType": "MODIFIED"
+  },
+  {
+   "path": "docs/command-development.md",
+   "additions": 4,
+   "deletions": 0,
+   "changeType": "MODIFIED"
+  },
+  {
+   "path": "internal/atomicfile/atomicfile.go",
+   "additions": 35,
+   "deletions": 0,
+   "changeType": "ADDED"
+  }
+ ],
+ "headRefName": "williammartin-global-feature-flags",
+ "headRefOid": "2e734c0e0a194e9b323e1b2aea98aea16b0f49d7",
+ "isCrossRepository": false,
+ "isDraft": true,
+ "labels": [],
+ "mergeStateStatus": "BLOCKED",
+ "mergeable": "MERGEABLE",
+ "number": 14781,
+ "reviewDecision": "REVIEW_REQUIRED",
+ "reviewRequests": [],
+ "reviews": [
+  {
+   "id": "PRR_kwDODKw3uc8AAAABTazJZw",
+   "author": {
+    "login": "copilot-pull-request-reviewer"
+   },
+   "authorAssociation": "CONTRIBUTOR",
+   "body": "<!-- ccr-overview-v2 -->\n\n### \ud83d\udfe1 Changes recommended\n\nWorker output handling can interrupt detached refreshes, and client",
+   "submittedAt": "2026-10-21T10:12:05Z",
+   "includesCreatedEdit": false,
+   "reactionGroups": [],
+   "state": "COMMENTED",
+   "commit": {
+    "oid": "2fc237757b18c4ad69e8068693614feceaf2cd58"
+   }
+  }
+ ],
+ "state": "OPEN",
+ "statusCheckRollup": [
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-10-21T10:44:01Z",
+   "conclusion": "SKIPPED",
+   "detailsUrl": "https://github.com/cli/cli/actions/runs/39586731133/job/119177383384",
+   "name": "label-external",
+   "startedAt": "2026-10-21T10:44:02Z",
+   "status": "COMPLETED",
+   "workflowName": "PR Triaging"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-10-21T10:45:59Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/cli/cli/actions/runs/39586635095/job/119177050437",
+   "name": "CodeQL-Build (go, manual, ./.github/codeql/codeql-config.yml)",
+   "startedAt": "2026-10-21T10:43:17Z",
+   "status": "COMPLETED",
+   "workflowName": "Code Scanning"
+  },
+  {
+   "__typename": "CheckRun",
+   "completedAt": "2026-10-21T10:45:27Z",
+   "conclusion": "SUCCESS",
+   "detailsUrl": "https://github.com/cli/cli/actions/runs/39586635070/job/119177050982",
+   "name": "lint",
+   "startedAt": "2026-10-21T10:43:16Z",
+   "status": "COMPLETED",
+   "workflowName": "Lint"
+  }
+ ],
+ "title": "Add global feature flag infrastructure",
+ "updatedAt": "2026-10-21T10:53:30Z",
+ "url": "https://github.com/cli/cli/pull/14781"
+}

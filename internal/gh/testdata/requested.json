@@ -1,0 +1,68 @@
+[
+ {
+  "author": null,
+  "baseRefName": "trunk",
+  "headRefName": "release-download-verify",
+  "headRefOid": "654d851d8145b2912fe474ceb0a47681854b37e2",
+  "isCrossRepository": true,
+  "isDraft": true,
+  "mergeStateStatus": "BLOCKED",
+  "mergeable": "MERGEABLE",
+  "number": 14783,
+  "reviewDecision": "REVIEW_REQUIRED",
+  "reviewRequests": [],
+  "state": "OPEN",
+  "statusCheckRollup": [
+   {
+    "__typename": "CheckRun",
+    "completedAt": "2026-10-21T17:07:09Z",
+    "conclusion": "SKIPPED",
+    "detailsUrl": "https://github.com/cli/cli/actions/runs/39640910716/job/119363866134",
+    "name": "label-external",
+    "startedAt": "2026-10-21T17:07:10Z",
+    "status": "COMPLETED",
+    "workflowName": "PR Triaging"
+   },
+   {
+    "__typename": "CheckRun",
+    "completedAt": "2026-10-21T18:17:09Z",
+    "conclusion": "SKIPPED",
+    "detailsUrl": "https://github.com/cli/cli/actions/runs/39651327538/job/119400197497",
+    "name": "label-external",
+    "startedAt": "2026-10-21T18:17:20Z",
+    "status": "COMPLETED",
+    "workflowName": "PR Triaging"
+   },
+   {
+    "__typename": "CheckRun",
+    "completedAt": "2026-10-21T17:06:15Z",
+    "conclusion": "SUCCESS",
+    "detailsUrl": "https://github.com/cli/cli/actions/runs/39640743812/job/119363280867",
+    "name": "label-external / label_issues",
+    "startedAt": "2026-10-21T17:06:07Z",
+    "status": "COMPLETED",
+    "workflowName": "PR Triaging"
+   },
+   {
+    "__typename": "StatusContext",
+    "context": "ci/legacy",
+    "state": "PENDING",
+    "targetUrl": "https://ci.example.com/1",
+    "startedAt": "2026-10-21T18:00:00Z"
+   },
+   {
+    "__typename": "CheckRun",
+    "name": "build",
+    "status": "IN_PROGRESS",
+    "conclusion": "",
+    "detailsUrl": "https://github.com/cli/cli/actions/runs/1/job/2",
+    "startedAt": "2026-10-21T18:00:00Z",
+    "completedAt": "0001-01-01T00:00:00Z",
+    "workflowName": "CI"
+   }
+  ],
+  "title": "release download: add --verify to check immutability and build provenance before downloading",
+  "updatedAt": "2026-10-21T18:17:03Z",
+  "url": "https://github.com/cli/cli/pull/14783"
+ }
+]

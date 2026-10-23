@@ -1,0 +1,70 @@
+{
+ "data": {
+  "repository": {
+   "pullRequest": {
+    "reviewThreads": {
+     "totalCount": 2,
+     "nodes": [
+      {
+       "id": "PRRT_kwDODKw3uc6ut5yP",
+       "isResolved": false,
+       "isOutdated": false,
+       "path": "internal/ghcmd/global_flags.go",
+       "line": 25,
+       "comments": {
+        "nodes": [
+         {
+          "id": "PRRC_kwDODKw3uc8AAAABAmuDIg",
+          "body": "\ud83d\uded1 Requirement: Connect detached worker output directly to the null device\n\nAssigning io.Discard makes os/exec create output pipes drained by the paren",
+          "createdAt": "2026-10-21T10:12:04Z",
+          "url": "https://github.com/cli/cli/pull/14781#discussion_r4335567650",
+          "viewerCanUpdate": false,
+          "author": {
+           "login": "copilot-pull-request-reviewer"
+          },
+          "state": "SUBMITTED"
+         }
+        ]
+       }
+      },
+      {
+       "id": "PRRT_kwDODKw3uc6ut5zK",
+       "isResolved": false,
+       "isOutdated": false,
+       "path": "docs/guide.md",
+       "line": 2,
+       "comments": {
+        "nodes": [
+         {
+          "id": "PRRC_kwDODKw3uc8AAAABAmuDfQ",
+          "body": "\ud83d\uded1 Requirement: Keep worker requests independent of GitHub socket configuration\n\nWith no transport supplied, the external-client helper lets go-gh v2.1",
+          "createdAt": "2026-10-21T10:12:04Z",
+          "url": "https://github.com/cli/cli/pull/14781#discussion_r4335567741",
+          "viewerCanUpdate": false,
+          "author": {
+           "login": "copilot-pull-request-reviewer"
+          },
+          "state": "PENDING"
+         }
+        ]
+       }
+      }
+     ]
+    },
+    "reviews": {
+     "nodes": [
+      {
+       "id": "PRR_pending",
+       "commit": {
+        "oid": "abc123"
+       },
+       "comments": {
+        "totalCount": 3
+       }
+      }
+     ]
+    }
+   }
+  }
+ }
+}
