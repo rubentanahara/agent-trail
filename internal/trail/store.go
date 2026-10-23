@@ -99,17 +99,7 @@ func (t *Trail) Start(cutoff time.Time) Batch {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.cutoff = cutoff
-	var events []Event
-	for _, path := range t.discover() {
-		file := t.transcripts[path]
-		info, err := os.Stat(path)
-		if err == nil && info.ModTime().Before(cutoff) {
-			file.parked, file.parkedSize = true, info.Size()
-			continue
-		}
-		events = append(events, t.read(path, file)...)
-	}
-	return t.finish(events)
+	return t.finish(t.readConcurrently(t.startReads(cutoff)))
 }
 
 func (t *Trail) Poll() Batch {
@@ -280,6 +270,10 @@ func (t *Trail) session(file *transcript, path string) *Session {
 }
 
 func (t *Trail) read(path string, file *transcript) []Event {
+	return t.readSession(path, file, t.session(file, path))
+}
+
+func (t *Trail) readSession(path string, file *transcript, session *Session) []Event {
 	handle, err := os.Open(path)
 	if err != nil {
 		return nil
@@ -288,7 +282,6 @@ func (t *Trail) read(path string, file *transcript) []Event {
 	if _, err := handle.Seek(file.offset, io.SeekStart); err != nil {
 		return nil
 	}
-	session := t.session(file, path)
 	var events []Event
 	reader := bufio.NewReader(handle)
 	for {
