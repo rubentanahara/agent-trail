@@ -15,16 +15,17 @@ import (
 )
 
 const (
-	headerHeight   = 1
-	barBlock       = "█"
-	sparkLevels    = "▁▂▃▄▅▆▇█"
-	labelShare     = 2
-	fifths         = 5
-	minutesShown   = 60
-	hoursShown     = 24
-	daysShown      = 30
-	sparkLabelW    = 10
-	percentPerUnit = 100
+	headerHeight     = 1
+	barBlock         = "█"
+	sparkLevels      = "▁▂▃▄▅▆▇█"
+	labelShare       = 2
+	fifths           = 5
+	minutesShown     = 60
+	hoursShown       = 24
+	daysShown        = 30
+	sparkLabelW      = 10
+	percentPerUnit   = 100
+	notEnoughHistory = "—"
 )
 
 var barStyle = lipgloss.NewStyle().Foreground(focusColour)
@@ -38,26 +39,26 @@ type barRow struct {
 
 func (m model) renderStats() string {
 	bodyH := m.height - footerHeight - headerHeight
-	if m.stats == nil {
+	if m.statsScreen.loading {
 		footer := m.footerLine(faintStyle.Render("t/esc back to the trail  q quit"))
-		return lipgloss.JoinVertical(lipgloss.Left, fit(m.statsHeader(), m.width), box("Stats", m.statsPlaceholder(), m.width, bodyH, true), footer)
+		return lipgloss.JoinVertical(lipgloss.Left, fit(m.statsHeader(), m.width), paneBox{"Stats", statsPlaceholder(), m.width, bodyH, focusColour}.render(), footer)
 	}
-	footer := m.footerLine(faintStyle.Render("t/esc back to the trail  a " + shownOrHidden(!m.stats.ShowAutomated) + " automated sessions  q quit"))
+	footer := m.footerLine(faintStyle.Render("t/esc back to the trail  a " + shownOrHidden(!m.statsScreen.data.ShowAutomated) + " automated sessions  q quit"))
 	leftW, topH := m.width/2, bodyH/2
 	rightW, bottomH := m.width-leftW, bodyH-topH
 	cliH := topH / 2
 	now := time.Now()
 	left := stack(
-		box("Which CLI you use most (prompts)", m.cliRows(leftW-2), leftW, cliH, false),
-		box("Tokens your tools saved, as they record it", m.savingsRows(leftW-2), leftW, topH-cliH, false),
+		paneBox{"Which CLI you use most (prompts)", m.cliRows(leftW - 2), leftW, cliH, idleColour}.render(),
+		paneBox{"Tokens your tools saved, as they record it", m.savingsRows(leftW - 2), leftW, topH - cliH, idleColour}.render(),
 	)
 	top := lipgloss.JoinHorizontal(lipgloss.Top,
 		left,
-		box("Which project you work on most (prompts)", m.projectRows(rightW-2), rightW, topH, false),
+		paneBox{"Which project you work on most (prompts)", m.projectRows(rightW - 2), rightW, topH, idleColour}.render(),
 	)
 	bottom := lipgloss.JoinHorizontal(lipgloss.Top,
-		box("Which file types the agents touch (tool calls)", m.extensionRows(leftW-2), leftW, bottomH, false),
-		box("Spend at API list prices", m.spendRows(now, rightW-2), rightW, bottomH, false),
+		paneBox{"Which file types the agents touch (tool calls)", m.extensionRows(leftW - 2), leftW, bottomH, idleColour}.render(),
+		paneBox{"Spend at API list prices", m.spendRows(now, rightW-2), rightW, bottomH, idleColour}.render(),
 	)
 	return lipgloss.JoinVertical(lipgloss.Left, fit(m.statsHeader(), m.width), top, bottom, footer)
 }
@@ -65,24 +66,24 @@ func (m model) renderStats() string {
 func (m model) statsHeader() string {
 	since := "the whole history"
 	if !m.context.StatsSince.IsZero() {
-		since = "since " + m.context.StatsSince.Local().Format("2006-01-02")
+		since = "since " + m.context.StatsSince.Local().Format(time.DateOnly)
 	}
 	return titleStyle.Render("Stats") + faintStyle.Render(" · every repository · "+since+" · subscription costs are API-equivalent"+m.automatedNote())
 }
 
 func (m model) automatedNote() string {
-	if m.stats == nil || m.stats.ShowAutomated {
+	if m.statsScreen.data.ShowAutomated {
 		return ""
 	}
-	return fmt.Sprintf(" · %d automated sessions hidden", m.stats.AutomatedSessions())
+	return fmt.Sprintf(" · %d automated sessions hidden", m.statsScreen.data.AutomatedSessions())
 }
 
 func (m model) savingsRows(width int) []string {
-	if len(m.savings) == 0 {
+	if len(m.statsScreen.savings) == 0 {
 		return []string{faintStyle.Render("no RTK or Headroom savings recorded")}
 	}
 	var rows []barRow
-	for _, saving := range m.savings {
+	for _, saving := range m.statsScreen.savings {
 		note := trail.Tokens(saving.Tokens) + " tokens"
 		if !saving.Since.IsZero() {
 			note += " since " + saving.Since.Local().Format(time.DateOnly)
@@ -95,16 +96,13 @@ func (m model) savingsRows(width int) []string {
 	return bars(rows, width)
 }
 
-func (m model) statsPlaceholder() []string {
-	if m.statsLoading {
-		return []string{"Reading the transcripts of every repository…"}
-	}
-	return []string{faintStyle.Render("no stats available")}
+func statsPlaceholder() []string {
+	return []string{"Reading the transcripts of every repository…"}
 }
 
 func (m model) cliRows(width int) []string {
 	var rows []barRow
-	for _, row := range m.stats.ByCLI() {
+	for _, row := range m.statsScreen.data.ByCLI() {
 		note := fmt.Sprintf("%d prompts · %d sessions · %s · cache %s", row.Prompts, row.Sessions, trail.Dollars(row.CostUSD), percent(row.CacheReadShare()))
 		rows = append(rows, barRow{label: row.Label, style: cliStyle(trail.CLI(row.Label)), value: float64(row.Prompts), note: note})
 	}
@@ -114,7 +112,7 @@ func (m model) cliRows(width int) []string {
 func (m model) projectRows(width int) []string {
 	home, _ := os.UserHomeDir()
 	var rows []barRow
-	for _, row := range m.stats.ByProject() {
+	for _, row := range m.statsScreen.data.ByProject() {
 		label := row.Label
 		if home != "" && strings.HasPrefix(label, home) {
 			label = "~" + strings.TrimPrefix(label, home)
@@ -127,7 +125,7 @@ func (m model) projectRows(width int) []string {
 
 func (m model) extensionRows(width int) []string {
 	var rows []barRow
-	for _, count := range m.stats.Extensions() {
+	for _, count := range m.statsScreen.data.Extensions() {
 		rows = append(rows, barRow{label: count.Label, style: lipgloss.NewStyle(), value: float64(count.N), note: fmt.Sprintf("%d", count.N)})
 	}
 	return bars(rows, width)
@@ -135,8 +133,8 @@ func (m model) extensionRows(width int) []string {
 
 func (m model) spendRows(now time.Time, width int) []string {
 	rows := []string{labelStyle.Render(fmt.Sprintf("%-*s %12s %12s", sparkLabelW-1, "per", "current", "average"))}
-	for _, period := range m.stats.Spend(now) {
-		rows = append(rows, fmt.Sprintf("%-*s %12s %12s", sparkLabelW-1, period.Name, trail.Dollars(period.Current), trail.Dollars(period.Average)))
+	for _, period := range m.statsScreen.data.Spend(now) {
+		rows = append(rows, fmt.Sprintf("%-*s %12s %12s", sparkLabelW-1, period.Name, trail.Dollars(period.Current), averageText(period)))
 	}
 	sparkW := width - sparkLabelW
 	rows = append(rows, "",
@@ -145,11 +143,18 @@ func (m model) spendRows(now time.Time, width int) []string {
 		m.sparkRow(now, "last 30d", 24*time.Hour, min(daysShown, sparkW)),
 		"",
 	)
-	return append(rows, tokenAdvice(m.stats.Overall())...)
+	return append(rows, tokenAdvice(m.statsScreen.data.Overall())...)
+}
+
+func averageText(period stats.PeriodSpend) string {
+	if !period.HasAverage {
+		return notEnoughHistory
+	}
+	return trail.Dollars(period.Average)
 }
 
 func (m model) sparkRow(now time.Time, label string, step time.Duration, count int) string {
-	values := m.stats.Series(now, step, max(1, count))
+	values := m.statsScreen.data.Series(now, step, max(1, count))
 	peak := 0.0
 	for _, value := range values {
 		peak = math.Max(peak, value)

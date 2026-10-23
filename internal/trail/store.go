@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -24,23 +24,30 @@ type source struct {
 	cli        CLI
 	candidates func() []string
 	belongs    func(path, repo string) (belongs, decided bool)
-	newParser  func(path string) parser
 	sessionID  func(path string) string
+	parentID   func(path string) string
 	artifacts  func(path string) []string
 }
 
+var newParsers = map[CLI]func(path string) parser{Claude: newClaudeParser, Codex: newCodexParser, Copilot: newCopilotParser}
+
 func sources(home, repo string) []source {
 	return []source{
-		{Claude, func() []string { return claudeCandidates(home, repo) }, claudeBelongs, newClaudeParser, claudeSessionID, claudeArtifacts},
-		{Codex, func() []string { return codexCandidates(home) }, codexBelongs, newCodexParser, codexSessionID, codexArtifacts},
-		{Copilot, func() []string { return copilotCandidates(home) }, copilotBelongs, newCopilotParser, copilotSessionID, copilotArtifacts},
+		{Claude, func() []string { return claudeCandidates(home, repo) }, claudeBelongs, claudeSessionID, claudeParentID, claudeArtifacts},
+		{Codex, func() []string { return codexCandidates(home) }, codexBelongs, codexSessionID, noParent, codexArtifacts},
+		{Copilot, func() []string { return copilotCandidates(home) }, copilotBelongs, copilotSessionID, noParent, copilotArtifacts},
 	}
+}
+
+func noParent(string) string {
+	return ""
 }
 
 type transcript struct {
 	source     *source
 	parser     parser
 	sessionKey string
+	parentKey  string
 	offset     int64
 	hideBefore int64
 	parkedSize int64
@@ -67,6 +74,8 @@ type Trail struct {
 	indexSize   int64
 	prices      pricing.Table
 }
+
+const EveryRepository = ""
 
 func New(home, repo string, prices pricing.Table) *Trail {
 	return &Trail{
@@ -115,7 +124,7 @@ func (t *Trail) Poll() Batch {
 			events = append(events, t.read(path, file)...)
 		case file.parked:
 		case size >= 0 && size < file.offset:
-			file.offset, file.hideBefore, file.parser = 0, 0, file.source.newParser(path)
+			file.offset, file.hideBefore, file.parser = 0, 0, newParsers[file.source.cli](path)
 			events = append(events, t.read(path, file)...)
 		case size > file.offset:
 			events = append(events, t.read(path, file)...)
@@ -124,16 +133,25 @@ func (t *Trail) Poll() Batch {
 	return t.finish(events)
 }
 
-var ErrSessionRunning = errors.New("session is running; close it before deleting")
+const recentWriteGuard = 2 * time.Minute
+
+var (
+	ErrSessionRunning        = errors.New("session is running; close it before deleting")
+	ErrSessionRecentlyActive = errors.New("session wrote to its transcript in the last 2 minutes; wait before deleting")
+)
 
 func (t *Trail) Delete(key string) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if session := t.sessions[key]; session != nil && session.Liveness == LivenessRunning {
-		return ErrSessionRunning
+	t.refreshLiveness()
+	family := t.family(key)
+	for _, member := range family {
+		if err := t.deletable(member); err != nil {
+			return err
+		}
 	}
 	for path, file := range t.transcripts {
-		if file.sessionKey != key {
+		if !slices.Contains(family, file.sessionKey) {
 			continue
 		}
 		for _, target := range file.source.artifacts(path) {
@@ -143,9 +161,38 @@ func (t *Trail) Delete(key string) error {
 		}
 		delete(t.transcripts, path)
 	}
-	delete(t.sessions, key)
-	delete(t.changed, key)
+	for _, member := range family {
+		delete(t.sessions, member)
+		delete(t.changed, member)
+	}
 	return nil
+}
+
+func (t *Trail) family(key string) []string {
+	members := []string{key}
+	for child, session := range t.sessions {
+		if session.Parent == key {
+			members = append(members, child)
+		}
+	}
+	return members
+}
+
+func (t *Trail) deletable(key string) error {
+	if session := t.sessions[key]; session != nil && (session.Liveness == LivenessRunning || session.TurnOpen) {
+		return ErrSessionRunning
+	}
+	for path, file := range t.transcripts {
+		if file.sessionKey == key && writtenWithin(path, recentWriteGuard) {
+			return ErrSessionRecentlyActive
+		}
+	}
+	return nil
+}
+
+func writtenWithin(path string, window time.Duration) bool {
+	info, err := os.Stat(path)
+	return err == nil && time.Since(info.ModTime()) < window
 }
 
 func (t *Trail) finish(events []Event) Batch {
@@ -190,15 +237,28 @@ func (t *Trail) decide(path string, src *source) bool {
 		t.rejected[path] = true
 		return false
 	}
-	t.transcripts[path] = &transcript{source: src, parser: src.newParser(path), sessionKey: string(src.cli) + ":" + src.sessionID(path)}
+	t.transcripts[path] = newTranscript(src, path)
 	return true
+}
+
+func newTranscript(src *source, path string) *transcript {
+	file := &transcript{source: src, parser: newParsers[src.cli](path), sessionKey: sessionKey(src.cli, src.sessionID(path))}
+	if parent := src.parentID(path); parent != "" {
+		file.parentKey = sessionKey(src.cli, parent)
+		file.sessionKey = file.parentKey + "/" + src.sessionID(path)
+	}
+	return file
+}
+
+func sessionKey(cli CLI, id string) string {
+	return string(cli) + ":" + id
 }
 
 func (t *Trail) session(file *transcript, path string) *Session {
 	key := file.sessionKey
 	session := t.sessions[key]
 	if session == nil {
-		session = &Session{Key: key, CLI: file.source.cli, ID: file.source.sessionID(path)}
+		session = &Session{Key: key, CLI: file.source.cli, ID: file.source.sessionID(path), Parent: file.parentKey}
 		t.sessions[key] = session
 	}
 	t.changed[key] = true
@@ -290,7 +350,7 @@ func applyWorkspace(session *Session, fields map[string]string) {
 }
 
 func (t *Trail) refreshThreadNames() {
-	size := fileSize(filepath.Join(t.home, ".codex", "session_index.jsonl"))
+	size := fileSize(codexIndexPath(t.home))
 	if size != t.indexSize {
 		t.indexSize = size
 		t.threadNames = codexThreadNames(t.home)
@@ -314,71 +374,4 @@ func fileSize(path string) int64 {
 		return -1
 	}
 	return info.Size()
-}
-
-type Detail struct {
-	Text string
-	Raw  string
-}
-
-func LoadDetail(event Event) (Detail, error) {
-	line, err := readLineAt(event.Source.Path, event.Source.Offset)
-	if err != nil {
-		return Detail{}, err
-	}
-	detail := Detail{Raw: prettyJSON(line)}
-	if event.Usage != nil {
-		detail.Text = usageDetail(*event.Usage)
-		return detail, nil
-	}
-	detail.Text = fullText(event, line)
-	return detail, nil
-}
-
-func fullText(event Event, line []byte) string {
-	events, err := parserFor(event.CLI, event.Source.Path).parse(line, &Session{})
-	if err != nil || event.Source.Index >= len(events) {
-		return event.Summary
-	}
-	return events[event.Source.Index].Text
-}
-
-func parserFor(cli CLI, path string) parser {
-	switch cli {
-	case Claude:
-		return newClaudeParser(path)
-	case Codex:
-		return newCodexParser(path)
-	default:
-		return newCopilotParser(path)
-	}
-}
-
-func readLineAt(path string, offset int64) ([]byte, error) {
-	handle, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer handle.Close()
-	if _, err := handle.Seek(offset, io.SeekStart); err != nil {
-		return nil, err
-	}
-	return bufio.NewReader(handle).ReadBytes('\n')
-}
-
-func prettyJSON(line []byte) string {
-	var out bytes.Buffer
-	if json.Indent(&out, bytes.TrimSpace(line), "", "  ") != nil {
-		return string(line)
-	}
-	return out.String()
-}
-
-func usageDetail(u Usage) string {
-	cost := "not shown: no price for this model in the price list"
-	if u.Priced {
-		cost = Dollars(u.CostUSD) + " at API list prices"
-	}
-	return fmt.Sprintf("model        %s\ninput        %d\n  cache read %d\n  cache write %d\noutput       %d\n  reasoning  %d\nduration     %s\ncost         %s",
-		u.Model, u.Input, u.CacheRead, u.CacheWrite, u.Output, u.Reasoning, u.Duration.Round(time.Millisecond), cost)
 }

@@ -11,7 +11,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/rubentanahara/agent-trail/internal/savings"
-	"github.com/rubentanahara/agent-trail/internal/stats"
 	"github.com/rubentanahara/agent-trail/internal/trail"
 )
 
@@ -71,19 +70,21 @@ type model struct {
 	haystack []string
 	sessions map[string]trail.Session
 	order    []string
+	children map[string][]string
 
 	sessionCursor int
 	sessionTop    int
 	activeSession string
 
-	visible     []int
-	eventCursor int
-	eventTop    int
-	follow      bool
-	showUsage   bool
-	hideNoise   bool
-	runningOnly bool
-	zoomed      bool
+	visible       []int
+	eventCursor   int
+	eventTop      int
+	follow        bool
+	showUsage     bool
+	hideNoise     bool
+	runningOnly   bool
+	hideAutomated bool
+	zoomed        bool
 
 	focus        pane
 	search       textinput.Model
@@ -104,16 +105,16 @@ type model struct {
 	confirmDelete string
 	notice        string
 
-	showStats    bool
-	stats        *stats.Stats
-	statsLoading bool
-	savings      []savings.Saving
+	statsScreen statsScreen
 
 	width  int
 	height int
 }
 
-var noiseKinds = map[trail.Kind]bool{trail.KindAttachment: true, trail.KindSystem: true}
+var (
+	noiseKinds = map[trail.Kind]bool{trail.KindAttachment: true, trail.KindSystem: true}
+	focusKeys  = map[string]pane{"1": sessionsPane, "2": eventsPane, "3": detailPane}
+)
 
 func Run(follower *trail.Trail, history trail.Batch, context Context) error {
 	_, err := tea.NewProgram(newModel(follower, history, context)).Run()
@@ -121,6 +122,7 @@ func Run(follower *trail.Trail, history trail.Batch, context Context) error {
 }
 
 func newModel(follower *trail.Trail, history trail.Batch, context Context) model {
+	hideAutomated := context.Repo == trail.EveryRepository
 	search := textinput.New()
 	search.Prompt = "/ "
 	search.Placeholder = "words must all match · 'exact · !exclude · esc clears"
@@ -133,6 +135,7 @@ func newModel(follower *trail.Trail, history trail.Batch, context Context) model
 		follow:          true,
 		showUsage:       true,
 		hideNoise:       true,
+		hideAutomated:   hideAutomated,
 		focus:           eventsPane,
 		search:          search,
 		detail:          detail,
@@ -188,21 +191,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		m.refreshDetail()
 	case pollMsg:
-		return m, tea.Batch(m.poll(), m.pollStats())
+		return m, tea.Batch(m.poll(), m.statsScreen.poll(m.context.Everywhere))
 	case batchMsg:
 		m.absorb(msg.batch)
 		cmds = append(cmds, tick())
 	case statsMsg:
-		m.absorbStats(msg.batch)
+		m.statsScreen.absorb(msg.batch)
 	case savingsMsg:
-		m.savings = msg.found
+		m.statsScreen.savings = msg.found
 	case deletedMsg:
 		m.finishDelete(msg)
+	case resumedMsg:
+		m.finishResume(msg)
 	case detailMsg:
 		if m.detailStillWanted(msg) {
 			m.detailData, m.detailErr, m.detailShown = msg.detail, msg.err, msg.index
-			m.refreshDetail()
-			m.detail.GotoTop()
+			m.showDetailFromTop()
 		}
 	case tea.MouseWheelMsg:
 		m.wheel(msg.Mouse())
@@ -239,29 +243,95 @@ func (m *model) absorb(batch trail.Batch) {
 		}
 	}
 	if m.follow {
-		m.eventCursor = len(m.visible) - 1
+		m.jumpToLatest()
 	}
+}
+
+func (m *model) jumpToLatest() {
+	m.eventCursor = len(m.visible) - 1
+}
+
+func (m *model) showDetailFromTop() {
+	m.refreshDetail()
+	m.detail.GotoTop()
 }
 
 func (m *model) reorderSessions() {
 	cursorKey := m.sessionKeyAt(m.sessionCursor)
+	m.indexChildren()
 	m.order = m.order[:0]
-	for key, session := range m.sessions {
-		if session.Events > 0 {
-			m.order = append(m.order, key)
+	for _, key := range m.listedParents() {
+		m.order = append(m.order, key)
+		if m.expanded(key) {
+			m.order = append(m.order, m.children[key]...)
 		}
 	}
-	m.order = slices.DeleteFunc(m.order, func(key string) bool {
-		session := m.sessions[key]
-		if m.runningOnly && session.Liveness != trail.LivenessRunning {
-			return true
-		}
-		return !m.sessionQuery.matches(sessionHaystack(session))
-	})
-	sort.Slice(m.order, func(i, j int) bool {
-		return m.sessions[m.order[i]].Last.After(m.sessions[m.order[j]].Last)
-	})
 	m.sessionCursor = m.rowOf(cursorKey)
+}
+
+func (m *model) indexChildren() {
+	m.children = map[string][]string{}
+	for key, session := range m.sessions {
+		if m.isChild(session) {
+			m.children[session.Parent] = append(m.children[session.Parent], key)
+		}
+	}
+	for _, keys := range m.children {
+		sort.Slice(keys, func(i, j int) bool { return m.sessions[keys[i]].Start.Before(m.sessions[keys[j]].Start) })
+	}
+}
+
+func (m model) isChild(session trail.Session) bool {
+	parent, ok := m.sessions[session.Parent]
+	return session.Events > 0 && ok && parent.Events > 0
+}
+
+func (m model) listedParents() []string {
+	var keys []string
+	for key, session := range m.sessions {
+		if session.Events > 0 && !m.isChild(session) && m.listed(key) {
+			keys = append(keys, key)
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool { return m.familyLast(keys[i]).After(m.familyLast(keys[j])) })
+	return keys
+}
+
+func (m model) listed(key string) bool {
+	session := m.sessions[key]
+	switch {
+	case m.hideAutomated && session.Automated:
+		return false
+	case m.runningOnly && !m.familyRunning(key):
+		return false
+	}
+	return slices.ContainsFunc(m.family(key), func(member string) bool {
+		return m.sessionQuery.matches(sessionHaystack(m.sessions[member]))
+	})
+}
+
+func (m model) family(key string) []string {
+	return append([]string{key}, m.children[key]...)
+}
+
+func (m model) familyRunning(key string) bool {
+	return slices.ContainsFunc(m.family(key), func(member string) bool {
+		return m.sessions[member].Liveness == trail.LivenessRunning
+	})
+}
+
+func (m model) familyLast(key string) time.Time {
+	last := m.sessions[key].Last
+	for _, child := range m.children[key] {
+		if m.sessions[child].Last.After(last) {
+			last = m.sessions[child].Last
+		}
+	}
+	return last
+}
+
+func (m model) expanded(key string) bool {
+	return key == m.activeSession || key == m.sessions[m.activeSession].Parent || m.familyRunning(key)
 }
 
 func (m model) sessionKeyAt(row int) string {
@@ -282,7 +352,11 @@ func (m model) rowOf(key string) int {
 
 func (m model) includes(index int) bool {
 	event := m.events[index]
-	if m.activeSession != "" && event.Session != m.activeSession {
+	session := m.sessions[event.Session]
+	if m.activeSession != "" && event.Session != m.activeSession && session.Parent != m.activeSession {
+		return false
+	}
+	if m.hideAutomated && (session.Automated || m.sessions[session.Parent].Automated) {
 		return false
 	}
 	if !m.showUsage && event.Kind == trail.KindUsage {
@@ -303,7 +377,7 @@ func (m *model) refilter() {
 		}
 	}
 	if m.follow || selected == noEvent {
-		m.eventCursor = len(m.visible) - 1
+		m.jumpToLatest()
 		return
 	}
 	m.eventCursor = sort.SearchInts(m.visible, selected)
@@ -324,6 +398,7 @@ func (m *model) selectSession(row int) {
 	key := m.sessionKeyAt(m.sessionCursor)
 	if key != m.activeSession {
 		m.activeSession = key
+		m.reorderSessions()
 		m.refilter()
 	}
 }
@@ -343,28 +418,35 @@ func (m *model) key(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return m.searchKey(msg), false
 	case m.confirmDelete != "":
 		return m.confirmKey(msg.String()), false
-	case m.showStats:
+	case m.statsScreen.shown:
 		return m.statsKey(msg.String())
+	}
+	if target, ok := focusKeys[msg.String()]; ok {
+		m.focus = target
+		return nil, false
 	}
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return nil, true
 	case "t":
-		return m.openStats(), false
+		return m.statsScreen.open(m.context), false
 	case "z":
 		m.zoomed = !m.zoomed
 	case "o":
 		m.runningOnly = !m.runningOnly
 		m.reorderSessions()
+	case "m":
+		m.hideAutomated = !m.hideAutomated
+		m.reorderSessions()
+		m.refilter()
+	case "c":
+		return m.resume(), false
 	case "tab":
 		m.focus = (m.focus + 1) % paneCount
 	case "shift+tab":
 		m.focus = (m.focus + paneCount - 1) % paneCount
 	case "/":
-		m.searching, m.searchTarget = true, m.focus
-		m.search.SetValue(m.filterText[m.focus])
-		m.search.CursorEnd()
-		return m.search.Focus(), false
+		return m.startSearch(), false
 	case "esc":
 		m.escape()
 	case "a":
@@ -377,25 +459,29 @@ func (m *model) key(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	case "n":
 		m.hideNoise = !m.hideNoise
 		m.refilter()
-	case "1":
-		m.focus = sessionsPane
-	case "2":
-		m.focus = eventsPane
-	case "3":
-		m.focus = detailPane
 	case "r":
 		m.raw = !m.raw
-		m.refreshDetail()
-		m.detail.GotoTop()
+		m.showDetailFromTop()
 	case "f":
-		m.follow = !m.follow
-		if m.follow {
-			m.eventCursor = len(m.visible) - 1
-		}
+		m.toggleFollow()
 	default:
 		return m.paneKey(msg), false
 	}
 	return nil, false
+}
+
+func (m *model) startSearch() tea.Cmd {
+	m.searching, m.searchTarget = true, m.focus
+	m.search.SetValue(m.filterText[m.focus])
+	m.search.CursorEnd()
+	return m.search.Focus()
+}
+
+func (m *model) toggleFollow() {
+	m.follow = !m.follow
+	if m.follow {
+		m.jumpToLatest()
+	}
 }
 
 func (m *model) escape() {
@@ -423,8 +509,7 @@ func (m *model) applyFilter(target pane, text string) {
 		m.refilter()
 	case detailPane:
 		m.detailQuery = parseQuery(text)
-		m.refreshDetail()
-		m.detail.GotoTop()
+		m.showDetailFromTop()
 	}
 }
 
@@ -583,6 +668,8 @@ func (m *model) askDelete() {
 	switch {
 	case !ok:
 		m.notice = "pick a session to delete"
+	case m.isChild(session):
+		m.notice = "agents are deleted with their parent session; select the parent"
 	case session.Liveness == trail.LivenessRunning:
 		m.notice = trail.ErrSessionRunning.Error()
 	default:
@@ -605,7 +692,7 @@ func (m *model) confirmKey(key string) tea.Cmd {
 
 func (m *model) finishDelete(msg deletedMsg) {
 	if msg.err != nil {
-		m.notice = "delete failed: " + msg.err.Error()
+		m.notice = "not deleted: " + msg.err.Error()
 		return
 	}
 	m.notice = "deleted " + msg.label
@@ -613,16 +700,19 @@ func (m *model) finishDelete(msg deletedMsg) {
 }
 
 func (m *model) forgetSession(key string) {
-	delete(m.sessions, key)
+	family := m.family(key)
+	for _, member := range family {
+		delete(m.sessions, member)
+	}
 	kept := 0
 	for i, event := range m.events {
-		if event.Session != key {
+		if !slices.Contains(family, event.Session) {
 			m.events[kept], m.haystack[kept] = event, m.haystack[i]
 			kept++
 		}
 	}
 	m.events, m.haystack = m.events[:kept], m.haystack[:kept]
-	if m.activeSession == key {
+	if slices.Contains(family, m.activeSession) {
 		m.activeSession = ""
 	}
 	m.reorderSessions()
@@ -630,46 +720,4 @@ func (m *model) forgetSession(key string) {
 	m.visible = m.visible[:0]
 	m.refilter()
 	m.refreshDetail()
-}
-
-func (m *model) openStats() tea.Cmd {
-	m.showStats = true
-	home, since := m.context.Home, m.context.StatsSince
-	loadSavings := func() tea.Msg { return savingsMsg{savings.Load(home, since)} }
-	if m.stats != nil || m.statsLoading || m.context.Everywhere == nil {
-		return loadSavings
-	}
-	m.statsLoading = true
-	everywhere := m.context.Everywhere
-	return tea.Batch(loadSavings, func() tea.Msg { return statsMsg{everywhere.Start(since)} })
-}
-
-func (m *model) statsKey(key string) (tea.Cmd, bool) {
-	switch key {
-	case "q", "ctrl+c":
-		return nil, true
-	case "t", "esc":
-		m.showStats = false
-	case "a":
-		if m.stats != nil {
-			m.stats.ShowAutomated = !m.stats.ShowAutomated
-		}
-	}
-	return nil, false
-}
-
-func (m *model) absorbStats(batch trail.Batch) {
-	if m.stats == nil {
-		m.stats = stats.New(m.context.StatsSince)
-		m.statsLoading = false
-	}
-	m.stats.Add(batch)
-}
-
-func (m model) pollStats() tea.Cmd {
-	if !m.showStats || m.stats == nil {
-		return nil
-	}
-	everywhere := m.context.Everywhere
-	return func() tea.Msg { return statsMsg{everywhere.Poll()} }
 }

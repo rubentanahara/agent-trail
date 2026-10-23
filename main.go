@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"runtime/debug"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/rubentanahara/agent-trail/internal/pricing"
@@ -41,6 +42,7 @@ type options struct {
 	offline bool
 	prices  bool
 	version bool
+	global  bool
 }
 
 func main() {
@@ -62,14 +64,15 @@ func parseOptions(args []string, output io.Writer) (options, error) {
 	flags := flag.NewFlagSet("agent-trail", flag.ContinueOnError)
 	flags.SetOutput(output)
 	flags.Usage = func() {
-		fmt.Fprintln(output, "Usage: agent-trail [--once] [--days N | --all] [--repo PATH] [--offline] [--prices] [--version]")
-		fmt.Fprintln(output, "Live, filterable log of what Claude Code, Codex and Copilot CLI do in a git repository.")
+		fmt.Fprintln(output, "Usage: agent-trail [--once] [--days N | --all] [--repo PATH | --global] [--offline] [--prices] [--version]")
+		fmt.Fprintln(output, "Live, filterable log of what Claude Code, Codex and Copilot CLI do in a git repository, or in every repository.")
 		flags.PrintDefaults()
 	}
 	flags.BoolVar(&opts.once, "once", false, "print the history as plain text and exit")
 	flags.BoolVar(&opts.all, "all", false, "replay the whole history")
 	flags.Float64Var(&opts.days, "days", defaultReplayDays, "days of history to replay")
-	flags.StringVar(&opts.repo, "repo", "", "repository to follow (default: the git repository of the current directory)")
+	flags.StringVar(&opts.repo, "repo", "", "repository to follow (default: the git repository of the current directory, or every repository outside one)")
+	flags.BoolVar(&opts.global, "global", false, "follow every repository, even inside one")
 	flags.BoolVar(&opts.offline, "offline", false, "do not download the price list; use the cached copy if there is one")
 	flags.BoolVar(&opts.prices, "prices", false, "print the price of every model used in the replayed history and exit")
 	flags.BoolVar(&opts.version, "version", false, "print the version and exit")
@@ -82,6 +85,10 @@ func parseOptions(args []string, output io.Writer) (options, error) {
 	}
 	if opts.all && isFlagSet(flags, "days") {
 		fmt.Fprintln(output, "--all and --days cannot be combined")
+		return opts, errors.New("conflicting flags")
+	}
+	if opts.global && opts.repo != "" {
+		fmt.Fprintln(output, "--global and --repo cannot be combined")
 		return opts, errors.New("conflicting flags")
 	}
 	return opts, nil
@@ -98,7 +105,7 @@ func run(opts options) error {
 		fmt.Println("agent-trail", buildVersion())
 		return nil
 	}
-	repo, err := repository(opts.repo)
+	repo, err := followedRepository(opts)
 	if err != nil {
 		return err
 	}
@@ -114,7 +121,8 @@ func run(opts options) error {
 	follower := trail.New(home, repo, prices)
 	history := follower.Start(cutoff)
 	if opts.prices {
-		return printPrices(os.Stdout, prices, status, history.Events)
+		printPrices(os.Stdout, prices, status, history.Events)
+		return nil
 	}
 	if status.Warning != "" && (opts.once || !isTerminal(os.Stdout)) {
 		fmt.Fprintln(os.Stderr, "agent-trail:", status.Warning)
@@ -124,7 +132,7 @@ func run(opts options) error {
 	}
 	return tui.Run(follower, history, tui.Context{
 		Repo: repo, Home: home, Version: buildVersion(), PricesAsOf: prices.FetchedAt, PriceWarning: status.Warning,
-		Everywhere: trail.New(home, "", prices), StatsSince: statsSince(opts.all, cutoff),
+		Everywhere: trail.New(home, "", prices), StatsSince: statsSince(cutoff),
 	})
 }
 
@@ -139,10 +147,7 @@ func buildVersion() string {
 	return strings.TrimPrefix(info.Main.Version, modulePrefixLabel)
 }
 
-func statsSince(all bool, cutoff time.Time) time.Time {
-	if all {
-		return time.Time{}
-	}
+func statsSince(cutoff time.Time) time.Time {
 	monthAgo := time.Now().AddDate(0, 0, -statsDays)
 	if cutoff.Before(monthAgo) {
 		return cutoff
@@ -150,7 +155,7 @@ func statsSince(all bool, cutoff time.Time) time.Time {
 	return monthAgo
 }
 
-func printPrices(out io.Writer, prices pricing.Table, status pricing.Status, events []trail.Event) error {
+func printPrices(out io.Writer, prices pricing.Table, status pricing.Status, events []trail.Event) {
 	fmt.Fprintf(out, "price list: %s (fetched %s)\n", status.Source, prices.FetchedAt)
 	if status.Override != "" {
 		fmt.Fprintf(out, "overrides:  %s\n", status.Override)
@@ -174,7 +179,6 @@ func printPrices(out io.Writer, prices pricing.Table, status pricing.Status, eve
 		fmt.Fprintf(out, "%-32s %-9s %10s %10s %10s %10s %10s\n", event.Usage.Model, price.Source,
 			perMillion(base.Input), perMillion(base.Output), perMillion(base.CacheRead), perMillion(base.CacheWrite5m), perMillion(base.CacheWrite1h))
 	}
-	return nil
 }
 
 func perMillion(rate *float64) string {
@@ -184,6 +188,17 @@ func perMillion(rate *float64) string {
 	return fmt.Sprintf("%.4g", *rate*1_000_000)
 }
 
+func followedRepository(opts options) (string, error) {
+	if opts.global {
+		return trail.EveryRepository, nil
+	}
+	repo, err := repository(opts.repo)
+	if err != nil && opts.repo == "" {
+		return trail.EveryRepository, nil
+	}
+	return repo, err
+}
+
 func repository(override string) (string, error) {
 	command := exec.Command("git", "rev-parse", "--show-toplevel")
 	if override != "" {
@@ -191,7 +206,7 @@ func repository(override string) (string, error) {
 	}
 	out, err := command.Output()
 	if err != nil {
-		return "", errors.New("run it inside a git repository or pass --repo")
+		return "", errors.New("--repo is not inside a git repository")
 	}
 	return strings.TrimSpace(string(out)), nil
 }
@@ -213,5 +228,5 @@ func printHistory(out io.Writer, events []trail.Event) error {
 }
 
 func isBrokenPipe(err error) bool {
-	return strings.Contains(err.Error(), "broken pipe")
+	return errors.Is(err, syscall.EPIPE)
 }

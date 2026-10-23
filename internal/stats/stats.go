@@ -56,9 +56,10 @@ type Count struct {
 }
 
 type PeriodSpend struct {
-	Name    string
-	Current float64
-	Average float64
+	Name       string
+	Current    float64
+	Average    float64
+	HasAverage bool
 }
 
 type Stats struct {
@@ -84,13 +85,14 @@ func New(since time.Time) *Stats {
 }
 
 func (s *Stats) included(key string) bool {
-	return s.ShowAutomated || !s.sessions[key].Automated
+	session := s.sessions[key]
+	return s.ShowAutomated || (!session.Automated && !s.sessions[session.Parent].Automated)
 }
 
 func (s *Stats) AutomatedSessions() int {
 	count := 0
 	for key := range s.perSession {
-		if s.sessions[key].Automated {
+		if session := s.sessions[key]; session.Automated && session.Parent == "" {
 			count++
 		}
 	}
@@ -109,7 +111,10 @@ func (s *Stats) Add(batch trail.Batch) {
 func (s *Stats) addEvent(event trail.Event) {
 	totals := s.perSession[event.Session]
 	if totals == nil {
-		totals = &Totals{Sessions: 1}
+		totals = &Totals{}
+		if s.sessions[event.Session].Parent == "" {
+			totals.Sessions = 1
+		}
 		s.perSession[event.Session] = totals
 	}
 	if event.Kind == trail.KindUser {
@@ -266,18 +271,18 @@ func (s *Stats) Spend(now time.Time) []PeriodSpend {
 		length time.Duration
 	}{
 		{"minute", now.Truncate(time.Minute), time.Minute},
-		{"hour", now.Truncate(time.Hour), time.Hour},
+		{"hour", time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, now.Location()), time.Hour},
 		{"day", midnight(now), 24 * time.Hour},
 		{"week", midnight(now).AddDate(0, 0, -daysSinceMonday(now)), daysPerWeek * 24 * time.Hour},
 		{"month", time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()), averageMonthLen},
 	}
 	out := make([]PeriodSpend, 0, len(periods))
 	for _, period := range periods {
-		average := 0.0
-		if window > 0 {
-			average = total * float64(period.length) / float64(window)
+		row := PeriodSpend{Name: period.name, Current: spentSince(spend, period.start)}
+		if window >= period.length {
+			row.Average, row.HasAverage = total*float64(period.length)/float64(window), true
 		}
-		out = append(out, PeriodSpend{Name: period.name, Current: spentSince(spend, period.start), Average: average})
+		out = append(out, row)
 	}
 	return out
 }

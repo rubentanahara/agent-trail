@@ -2,7 +2,9 @@ package trail
 
 import (
 	"bufio"
+	"cmp"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,20 +13,22 @@ import (
 )
 
 const (
-	claudeOAuthBeta      = "oauth-2025-04-20"
-	claudeSubagentDir    = "subagents"
-	claudeUnknownAgent   = "sub"
-	nameRankAITitle      = 1
-	nameRankAgentName    = 2
-	nameRankCustomTitle  = 3
-	claudeQueuedCommand  = "queued_command"
-	claudeHumanOrigin    = "human"
-	claudeSpeedFast      = "fast"
-	claudeSDKEntrypoint  = "sdk"
-	claudeCommandPrefix  = "<command-name>"
-	claudeBashPrefix     = "<bash-input>"
-	claudeInjectedPrefix = "<"
-	hiddenThinking       = "(thinking text not returned by the API)"
+	claudeOAuthBeta       = "oauth-2025-04-20"
+	claudeSubagentDir     = "subagents"
+	claudeMetaSuffix      = ".meta.json"
+	claudeAgentFilePrefix = "agent-"
+	claudeUnknownAgent    = "sub"
+	nameRankAITitle       = 1
+	nameRankAgentName     = 2
+	nameRankCustomTitle   = 3
+	claudeQueuedCommand   = "queued_command"
+	claudeHumanOrigin     = "human"
+	claudeSpeedFast       = "fast"
+	claudeSDKEntrypoint   = "sdk"
+	claudeCommandPrefix   = "<command-name>"
+	claudeBashPrefix      = "<bash-input>"
+	claudeInjectedPrefix  = "<"
+	hiddenThinking        = "(thinking text not returned by the API)"
 )
 
 var nonAlphanumeric = regexp.MustCompile(`[^a-zA-Z0-9]`)
@@ -105,40 +109,63 @@ type claudeBlock struct {
 
 type claudeParser struct {
 	agent        string
+	description  string
+	finished     bool
+	metaPath     string
 	seenMessages map[string]bool
 }
 
-func newClaudeParser(path string) parser {
-	return &claudeParser{agent: claudeSubagentType(path), seenMessages: map[string]bool{}}
+type claudeAgentMeta struct {
+	AgentType   string `json:"agentType"`
+	Description string `json:"description"`
+	Finished    bool   `json:"finished"`
 }
 
-func claudeSubagentType(path string) string {
-	if filepath.Base(filepath.Dir(path)) != claudeSubagentDir {
-		return ""
+func newClaudeParser(path string) parser {
+	parser := &claudeParser{seenMessages: map[string]bool{}}
+	if !isClaudeSubagent(path) {
+		return parser
 	}
-	meta, err := os.ReadFile(strings.TrimSuffix(path, ".jsonl") + ".meta.json")
-	if err != nil {
-		return claudeUnknownAgent
+	parser.metaPath = claudeMetaPath(path)
+	meta := readClaudeAgentMeta(parser.metaPath)
+	parser.agent, parser.description, parser.finished = cmp.Or(meta.AgentType, claudeUnknownAgent), meta.Description, meta.Finished
+	return parser
+}
+
+func isClaudeSubagent(path string) bool {
+	return filepath.Base(filepath.Dir(path)) == claudeSubagentDir
+}
+
+func claudeMetaPath(path string) string {
+	return strings.TrimSuffix(path, ".jsonl") + claudeMetaSuffix
+}
+
+func readClaudeAgentMeta(path string) claudeAgentMeta {
+	var meta claudeAgentMeta
+	if raw, err := os.ReadFile(path); err == nil {
+		_ = json.Unmarshal(raw, &meta)
 	}
-	var parsed struct {
-		AgentType string `json:"agentType"`
-	}
-	if json.Unmarshal(meta, &parsed) != nil || parsed.AgentType == "" {
-		return claudeUnknownAgent
-	}
-	return parsed.AgentType
+	return meta
 }
 
 func claudeSessionID(path string) string {
-	if filepath.Base(filepath.Dir(path)) == claudeSubagentDir {
-		return filepath.Base(filepath.Dir(filepath.Dir(path)))
+	stem := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+	if isClaudeSubagent(path) {
+		return strings.TrimPrefix(stem, claudeAgentFilePrefix)
 	}
-	return strings.TrimSuffix(filepath.Base(path), ".jsonl")
+	return stem
+}
+
+func claudeParentID(path string) string {
+	if !isClaudeSubagent(path) {
+		return ""
+	}
+	return filepath.Base(filepath.Dir(filepath.Dir(path)))
 }
 
 func claudeArtifacts(path string) []string {
-	if filepath.Base(filepath.Dir(path)) == claudeSubagentDir {
-		return []string{filepath.Dir(filepath.Dir(path))}
+	if isClaudeSubagent(path) {
+		return []string{path, claudeMetaPath(path)}
 	}
 	return []string{path, strings.TrimSuffix(path, ".jsonl")}
 }
@@ -148,17 +175,16 @@ func claudeProjectPrefix(repo string) string {
 }
 
 func (p *claudeParser) parse(raw []byte, session *Session) ([]Event, error) {
-	var envelope struct {
-		Type string `json:"type"`
-	}
-	if err := json.Unmarshal(raw, &envelope); err != nil {
+	var entry claudeEntry
+	err := json.Unmarshal(raw, &entry)
+	var syntaxError *json.SyntaxError
+	if errors.As(err, &syntaxError) {
 		return nil, err
 	}
-	if !claudeHandledTypes[envelope.Type] {
+	if !claudeHandledTypes[entry.Type] {
 		return nil, nil
 	}
-	var entry claudeEntry
-	if err := json.Unmarshal(raw, &entry); err != nil {
+	if err != nil {
 		return nil, err
 	}
 	p.updateSession(entry, session)
@@ -167,8 +193,8 @@ func (p *claudeParser) parse(raw []byte, session *Session) ([]Event, error) {
 		return nil, nil
 	}
 	events := p.events(entry)
-	if usage := p.usageEvent(entry); usage != nil {
-		events = append(events, *usage)
+	if usage, ok := p.usageEvent(entry); ok {
+		events = append(events, usage)
 	}
 	for i := range events {
 		events[i].Time, events[i].CLI = at, Claude
@@ -178,7 +204,9 @@ func (p *claudeParser) parse(raw []byte, session *Session) ([]Event, error) {
 
 func (p *claudeParser) updateSession(entry claudeEntry, session *Session) {
 	if p.agent != "" {
-		session.addSubagent(p.agent)
+		session.Agent, session.metaPath = p.agent, p.metaPath
+		session.Finished = session.Finished || p.finished
+		session.setName(cmp.Or(p.description, p.agent), nameRankCustomTitle)
 	}
 	switch entry.Type {
 	case "agent-setting":
@@ -212,7 +240,7 @@ func (p *claudeParser) updateSession(entry claudeEntry, session *Session) {
 	if strings.HasPrefix(entry.Entrypoint, claudeSDKEntrypoint) {
 		session.Automated = true
 	}
-	if entry.Type == "assistant" && p.agent == "" && entry.Message != nil && entry.Message.Model != "" {
+	if entry.Type == "assistant" && entry.Message != nil && entry.Message.Model != "" {
 		session.Model = entry.Message.Model
 	}
 }
@@ -305,7 +333,7 @@ func claudeBlockEvent(agent string, speaker Kind, block claudeBlock) (Event, boo
 	case "text":
 		return Event{Agent: agent, Kind: speaker, Text: block.Text}, true
 	case "thinking":
-		return Event{Agent: agent, Kind: KindThinking, Text: firstNonEmpty(block.Thinking, hiddenThinking)}, true
+		return Event{Agent: agent, Kind: KindThinking, Text: cmp.Or(block.Thinking, hiddenThinking)}, true
 	case "tool_use":
 		return Event{Agent: agent, Kind: KindTool, Text: block.Name + " " + argumentsText(block.Input), Files: pathArguments(block.Input)}, true
 	case "tool_result":
@@ -318,18 +346,18 @@ func claudeBlockEvent(agent string, speaker Kind, block claudeBlock) (Event, boo
 	return Event{}, false
 }
 
-func (p *claudeParser) usageEvent(entry claudeEntry) *Event {
+func (p *claudeParser) usageEvent(entry claudeEntry) (Event, bool) {
 	if entry.Type != "assistant" || entry.Message == nil || entry.Message.Usage == nil {
-		return nil
+		return Event{}, false
 	}
 	if id := entry.Message.ID; id != "" {
 		if p.seenMessages[id] {
-			return nil
+			return Event{}, false
 		}
 		p.seenMessages[id] = true
 	}
 	usage := claudeUsageOf(entry.Message.Model, entry.Message.Usage)
-	return &Event{Agent: p.who(entry), Kind: KindUsage, Usage: &usage}
+	return Event{Agent: p.who(entry), Kind: KindUsage, Usage: &usage}, true
 }
 
 func claudeUsageOf(model string, raw *claudeUsage) Usage {
@@ -375,7 +403,7 @@ func claudeBelongs(path, repo string) (belongs, decided bool) {
 }
 
 func underRepo(path, repo string) bool {
-	return path == repo || strings.HasPrefix(path, repo+"/")
+	return repo == EveryRepository || path == repo || strings.HasPrefix(path, repo+"/")
 }
 
 func claudeCandidates(home, repo string) []string {

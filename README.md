@@ -33,13 +33,14 @@ go install github.com/rubentanahara/agent-trail@latest
 
 ## Use
 
-Run it inside the repository you want to watch:
+Run it inside the repository you want to watch. Outside a git repository it follows every repository:
 
 ```sh
 agent-trail              # last 2 days of history, then follow live
 agent-trail --days 7     # replay 7 days
 agent-trail --all        # replay everything
 agent-trail --repo ~/src/app
+agent-trail --global     # every repository, even inside one
 agent-trail --once | grep FAILED   # plain text, no TUI
 agent-trail --prices     # the price used for every model in the history
 agent-trail --offline    # do not download the price list
@@ -65,7 +66,9 @@ When stdout is not a terminal it prints the history as plain text and exits.
 | `f` | Turn auto-scroll to the newest event on or off |
 | `z` | Zoom the focused pane to the whole screen, or restore the layout. While zoomed, `1` `2` `3` and `tab` switch which pane fills the screen |
 | `o` | Sessions pane: show only running sessions, or all again. Codex sessions never show as running (see State) |
-| `x` | Sessions pane: delete the selected session and its transcript files, after you confirm with `y`. Running sessions cannot be deleted |
+| `c` | Continue the selected session in its own CLI, in the folder it ran in: `claude --resume <id>`, `codex resume <id>` or `copilot --resume <id>`. agent-trail returns when you quit the CLI. Refused while the session is open in another terminal. On an agent row it opens the parent session |
+| `m` | Show or hide sessions started by a program (see Stats screen). Hidden at start when following every repository |
+| `x` | Sessions pane: delete the selected session and its transcript files, after you confirm with `y`. A session is refused while it is running, while a Codex or Copilot turn is open, or if its transcript changed in the last 2 minutes. Agents are deleted with their parent |
 | `t` | Open or close the stats screen (see below) |
 | `q` | Quit |
 
@@ -117,7 +120,7 @@ The deletion is permanent; nothing goes to the trash.
 
 Costs use API list prices, so subscription usage is an API-equivalent figure.
 
-Sessions started by a program rather than typed in the interactive CLI are hidden at start, and the header says how many. `a` shows or hides them. Claude Code marks them with an `sdk-*` entrypoint (`claude -p`, the Agent SDK, tools such as claude-mem's observer); Codex marks them with the `exec` source (`codex exec`). Copilot CLI records no such marker, so its sessions are always shown.
+Sessions started by a program rather than typed in the interactive CLI are hidden at start, and the header says how many. `a` shows or hides them. Claude Code marks them with an `sdk-*` entrypoint (`claude -p`, the Agent SDK, tools such as claude-mem's observer); Codex marks them with the `exec` source (`codex exec`). Copilot CLI records no such marker, so its sessions are always shown. An average needs at least one full period of history, so it shows `—` until then.
 
 #### Token savings
 
@@ -134,7 +137,9 @@ Output-style tools such as caveman and ponytail record no savings: there is no r
 
 ## What it shows
 
-**Sessions.** One row per session that had activity in the replay window, newest first. Each row shows its state, the time since its last event, and its cost. The name is the session title the CLI generated or you set, otherwise your first prompt. Subagent activity is shown inside its parent session as `claude/<agent-type>`.
+**Sessions.** One row per session that had activity in the replay window, the most recently active first. Each row shows its state, the time since its last event, and its cost including its agents. The name is the session title the CLI generated or you set, otherwise the first prompt. When following every repository, the row also names the folder the session ran in.
+
+**Agents.** Each Claude Code subagent (a Task or Agent call, foreground or background) gets its own row under the session that started it, named by the description it was given, with its agent type. `●` means it is still running and `✓` that it finished, read from the `.meta.json` Claude Code writes beside each agent transcript. Agents are listed while their session is running or selected, and folded away otherwise. Selecting the session shows its events and every agent's; selecting an agent shows only that agent's. Codex and Copilot CLI record their subagents inside the session transcript, so they stay in the parent row and the `Subagents` field.
 
 **Session state.**
 

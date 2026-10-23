@@ -95,6 +95,7 @@ const (
 type Session struct {
 	Key          string
 	ID           string
+	Parent       string
 	CLI          CLI
 	Name         string
 	Agent        string
@@ -122,12 +123,24 @@ type Session struct {
 	Activity         string
 	PID              int
 	TurnOpen         bool
+	Finished         bool
 	RateLimitPercent float64
 	HasRateLimit     bool
 	ContextPercent   float64
 	HasContext       bool
 
 	nameRank int
+	metaPath string
+}
+
+var resumeCommands = map[CLI][]string{
+	Claude:  {"claude", "--resume"},
+	Codex:   {"codex", "resume"},
+	Copilot: {"copilot", "--resume"},
+}
+
+func ResumeCommand(session Session) []string {
+	return append(slices.Clone(resumeCommands[session.CLI]), session.ID)
 }
 
 func (s *Session) setName(name string, rank int) {
@@ -154,6 +167,19 @@ func (s *Session) addSubagent(name string) {
 	if name != "" && !slices.Contains(s.Subagents, name) {
 		s.Subagents = append(s.Subagents, name)
 	}
+}
+
+func (s Session) WithUsageOf(other Session) Session {
+	s.Calls += other.Calls
+	s.PricedCalls += other.PricedCalls
+	s.Tokens.Input += other.Tokens.Input
+	s.Tokens.CacheRead += other.Tokens.CacheRead
+	s.Tokens.CacheWrite += other.Tokens.CacheWrite
+	s.Tokens.Output += other.Tokens.Output
+	s.Tokens.Reasoning += other.Tokens.Reasoning
+	s.Tokens.CostUSD += other.Tokens.CostUSD
+	s.PremiumRequests += other.PremiumRequests
+	return s
 }
 
 func (s *Session) addUsage(u Usage) {

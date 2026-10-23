@@ -43,6 +43,16 @@ func (f fixture) write(path string, lines ...string) string {
 	return full
 }
 
+func (f fixture) backdate(paths ...string) {
+	f.t.Helper()
+	old := time.Now().Add(-time.Hour)
+	for _, path := range paths {
+		if err := os.Chtimes(filepath.Join(f.home, path), old, old); err != nil {
+			f.t.Fatal(err)
+		}
+	}
+}
+
 func (f fixture) appendRaw(path, text string) {
 	f.t.Helper()
 	handle, err := os.OpenFile(filepath.Join(f.home, path), os.O_APPEND|os.O_WRONLY, 0o644)
@@ -164,17 +174,45 @@ func TestOldSessionResumedAfterLaunchShowsOnlyNewLines(t *testing.T) {
 	}
 }
 
-func TestSubagentEventsJoinParentSessionUnderAgentName(t *testing.T) {
+func TestEachClaudeSubagentIsAChildSessionOfItsParent(t *testing.T) {
 	f := newFixture(t)
 	f.write(claudeDir+"parent.jsonl", claudePrompt("main", testRepo, stampNow))
-	f.write(claudeDir+"parent/subagents/agent-1.meta.json", `{"agentType":"web-fetch"}`)
-	f.write(claudeDir+"parent/subagents/agent-1.jsonl", `{"type":"assistant","isSidechain":true,"sessionId":"parent","cwd":"`+testRepo+`","timestamp":"`+stampLater+`","message":{"content":[{"type":"text","text":"fetched"}]}}`)
+	f.write(claudeDir+"parent/subagents/agent-a1.meta.json", `{"agentType":"web-fetch","description":"Read the docs","finished":true}`)
+	f.write(claudeDir+"parent/subagents/agent-a1.jsonl", `{"type":"assistant","isSidechain":true,"sessionId":"parent","cwd":"`+testRepo+`","timestamp":"`+stampLater+`","message":{"model":"claude-haiku-5-5","content":[{"type":"text","text":"fetched"}]}}`)
 	batch := New(f.home, testRepo, pricing.Table{}).Start(time.Time{})
-	if len(batch.Sessions) != 1 || strings.Join(batch.Sessions[0].Subagents, ",") != "web-fetch" {
-		t.Fatalf("sessions = %+v", batch.Sessions)
+	sessions := map[string]Session{}
+	for _, session := range batch.Sessions {
+		sessions[session.Key] = session
 	}
-	if who := batch.Events[1].Who(); who != "claude/web-fetch" {
-		t.Fatalf("who = %q", who)
+	child, ok := sessions["claude:parent/a1"]
+	if len(sessions) != 2 || !ok {
+		t.Fatalf("sessions = %v", sessions)
+	}
+	if child.Parent != "claude:parent" || child.Name != "Read the docs" || child.Agent != "web-fetch" || !child.Finished || child.Model != "claude-haiku-5-5" {
+		t.Fatalf("child = %+v", child)
+	}
+	if who := batch.Events[1].Who(); who != "claude/web-fetch" || batch.Events[1].Session != "claude:parent/a1" {
+		t.Fatalf("event = %+v", batch.Events[1])
+	}
+}
+
+func TestASubagentRunsUntilItsMetaSaysFinished(t *testing.T) {
+	f := newFixture(t)
+	f.write(claudeDir+"live.jsonl", claudePrompt("main", testRepo, stampNow))
+	f.write(".claude/sessions/1.json", `{"pid":`+strconv.Itoa(os.Getpid())+`,"sessionId":"live","status":"busy"}`)
+	meta := f.write(claudeDir+"live/subagents/agent-b2.meta.json", `{"agentType":"reviewer","description":"Review"}`)
+	f.write(claudeDir+"live/subagents/agent-b2.jsonl", `{"type":"assistant","isSidechain":true,"cwd":"`+testRepo+`","timestamp":"`+stampLater+`","message":{"content":[{"type":"text","text":"reading"}]}}`)
+	follower := New(f.home, testRepo, pricing.Table{})
+	follower.Start(time.Time{})
+	if child := follower.sessions["claude:live/b2"]; child.Liveness != LivenessRunning {
+		t.Fatalf("unfinished agent of a running session = %+v", child.liveState())
+	}
+	if err := os.WriteFile(meta, []byte(`{"agentType":"reviewer","description":"Review","finished":true}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	follower.Poll()
+	if child := follower.sessions["claude:live/b2"]; child.Liveness != LivenessClosed || !child.Finished {
+		t.Fatalf("finished agent = %+v", child.liveState())
 	}
 }
 
@@ -266,6 +304,7 @@ func TestDeleteRemovesEveryFileOfTheSessionAndNothingElse(t *testing.T) {
 	f.write(claudeDir+"kept.jsonl", claudePrompt("stay", testRepo, stampNow))
 	f.write(".copilot/session-state/c1/workspace.yaml", "cwd: "+testRepo)
 	f.write(".copilot/session-state/c1/events.jsonl", `{"type":"user.message","timestamp":"`+stampNow+`","data":{"content":"hi"}}`)
+	f.backdate(claudeDir+"gone.jsonl", claudeDir+"gone/subagents/agent-1.jsonl", ".copilot/session-state/c1/events.jsonl")
 	follower := New(f.home, testRepo, pricing.Table{})
 	follower.Start(time.Time{})
 	for _, key := range []string{"claude:gone", "copilot:c1"} {
@@ -328,4 +367,46 @@ func TestSessionsStartedByAProgramAreMarkedAutomated(t *testing.T) {
 			t.Errorf("%s automated = %v, want %v (all: %v)", key, automated[key], value, automated)
 		}
 	}
+}
+
+func TestDeleteRefusesASessionThatWroteRecentlyOrHasAnOpenTurn(t *testing.T) {
+	f := newFixture(t)
+	f.write(claudeDir+"fresh.jsonl", claudePrompt("just now", testRepo, stampNow))
+	f.write(codexDir+"rollout-t-00000000-0000-0000-0000-000000000007.jsonl", codexMeta(testRepo),
+		`{"timestamp":"`+stampNow+`","type":"event_msg","payload":{"type":"task_started"}}`)
+	f.backdate(codexDir + "rollout-t-00000000-0000-0000-0000-000000000007.jsonl")
+	follower := New(f.home, testRepo, pricing.Table{})
+	follower.Start(time.Time{})
+	if err := follower.Delete("claude:fresh"); !errors.Is(err, ErrSessionRecentlyActive) {
+		t.Fatalf("fresh transcript: err = %v", err)
+	}
+	if err := follower.Delete("codex:00000000-0000-0000-0000-000000000007"); !errors.Is(err, ErrSessionRunning) {
+		t.Fatalf("open Codex turn: err = %v", err)
+	}
+}
+
+func TestDeletingAParentRemovesItsAgents(t *testing.T) {
+	f := newFixture(t)
+	f.write(claudeDir+"p.jsonl", claudePrompt("main", testRepo, stampNow))
+	f.write(claudeDir+"p/subagents/agent-c3.meta.json", `{"agentType":"reviewer","finished":true}`)
+	f.write(claudeDir+"p/subagents/agent-c3.jsonl", `{"type":"assistant","isSidechain":true,"cwd":"`+testRepo+`","timestamp":"`+stampLater+`","message":{"content":[{"type":"text","text":"done"}]}}`)
+	f.backdate(claudeDir+"p.jsonl", claudeDir+"p/subagents/agent-c3.jsonl")
+	follower := New(f.home, testRepo, pricing.Table{})
+	follower.Start(time.Time{})
+	if err := follower.Delete("claude:p"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(f.home, claudeDir+"p")); !os.IsNotExist(err) {
+		t.Fatalf("agent folder still exists: %v", err)
+	}
+	if len(follower.sessions) != 0 {
+		t.Fatalf("sessions left: %v", follower.sessions)
+	}
+}
+
+func TestEveryRepositoryFollowsSessionsFromAnyFolder(t *testing.T) {
+	f := newFixture(t)
+	f.write(".claude/projects/-elsewhere/e.jsonl", claudePrompt("other repo", "/elsewhere", stampNow))
+	f.write(claudeDir+"a.jsonl", claudePrompt("this repo", testRepo, stampNow))
+	assertSummaries(t, New(f.home, EveryRepository, pricing.Table{}).Start(time.Time{}).Events, "other repo", "this repo")
 }

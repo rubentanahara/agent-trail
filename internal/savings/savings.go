@@ -11,11 +11,10 @@ import (
 )
 
 const (
-	Headroom     = "headroom"
-	RTK          = "rtk"
-	AnyCLI       = "any CLI"
-	rtkDayLayout = "2006-01-02"
-	rtkTimeout   = 10 * time.Second
+	Headroom   = "headroom"
+	RTK        = "rtk"
+	AnyCLI     = "any CLI"
+	rtkTimeout = 10 * time.Second
 )
 
 type Saving struct {
@@ -40,8 +39,8 @@ func Load(home string, since time.Time) []Saving {
 }
 
 type headroomSummary struct {
-	Lifetime struct {
-		TokensSaved int64   `json:"tokens_saved"`
+	Lifetime *struct {
+		TokensSaved *int64  `json:"tokens_saved"`
 		SavingsUSD  float64 `json:"compression_savings_usd"`
 	} `json:"lifetime"`
 	Metrics struct {
@@ -55,12 +54,12 @@ func headroomTotal(path string) (Saving, bool) {
 		return Saving{}, false
 	}
 	var summary headroomSummary
-	if json.Unmarshal(raw, &summary) != nil {
+	if json.Unmarshal(raw, &summary) != nil || summary.Lifetime == nil || summary.Lifetime.TokensSaved == nil {
 		return Saving{}, false
 	}
 	return Saving{
 		Tool: Headroom, CLI: AnyCLI, Since: summary.Metrics.StartedAt,
-		Tokens: summary.Lifetime.TokensSaved, USD: summary.Lifetime.SavingsUSD, HasUSD: true,
+		Tokens: *summary.Lifetime.TokensSaved, USD: summary.Lifetime.SavingsUSD, HasUSD: true,
 	}, true
 }
 
@@ -86,7 +85,7 @@ func rtkTotal(report []byte, since time.Time) (Saving, bool) {
 	if json.Unmarshal(report, &parsed) != nil {
 		return Saving{}, false
 	}
-	firstDay := since.UTC().Format(rtkDayLayout)
+	firstDay := since.UTC().Format(time.DateOnly)
 	saving := Saving{Tool: RTK, CLI: AnyCLI}
 	for _, day := range parsed.Daily {
 		if since.IsZero() || day.Date >= firstDay {

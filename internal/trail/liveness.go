@@ -19,23 +19,56 @@ type claudeProcess struct {
 func (t *Trail) refreshLiveness() {
 	running := t.runningClaudeSessions()
 	for key, session := range t.sessions {
-		before := [3]any{session.Liveness, session.Activity, session.PID}
+		before := session.liveState()
 		switch session.CLI {
 		case Claude:
-			session.Liveness, session.Activity, session.PID = LivenessClosed, "", 0
-			if process, ok := running[session.ID]; ok {
-				session.Liveness, session.Activity, session.PID = LivenessRunning, process.Status, process.PID
-			}
+			t.claudeLiveness(session, running)
 		case Copilot:
 			session.Liveness, session.PID = t.copilotLiveness(session)
 			session.Activity = turnActivity(session.TurnOpen && session.Liveness == LivenessRunning)
 		case Codex:
 			session.Activity = turnActivity(session.TurnOpen)
 		}
-		if before != [3]any{session.Liveness, session.Activity, session.PID} {
+		if before != session.liveState() {
 			t.changed[key] = true
 		}
 	}
+}
+
+func (t *Trail) claudeLiveness(session *Session, running map[string]claudeProcess) {
+	session.Liveness, session.Activity, session.PID = LivenessClosed, "", 0
+	if session.Parent != "" {
+		t.agentLiveness(session, running)
+		return
+	}
+	if process, ok := running[session.ID]; ok {
+		session.Liveness, session.Activity, session.PID = LivenessRunning, process.Status, process.PID
+	}
+}
+
+func (t *Trail) agentLiveness(session *Session, running map[string]claudeProcess) {
+	parent := t.sessions[session.Parent]
+	if session.Finished || parent == nil {
+		return
+	}
+	if _, parentRunning := running[parent.ID]; !parentRunning {
+		return
+	}
+	session.Finished = readClaudeAgentMeta(session.metaPath).Finished
+	if !session.Finished {
+		session.Liveness, session.Activity = LivenessRunning, turnActivity(true)
+	}
+}
+
+type liveState struct {
+	liveness Liveness
+	activity string
+	pid      int
+	finished bool
+}
+
+func (s *Session) liveState() liveState {
+	return liveState{s.Liveness, s.Activity, s.PID, s.Finished}
 }
 
 func turnActivity(open bool) string {

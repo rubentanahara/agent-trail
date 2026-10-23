@@ -23,6 +23,13 @@ func TestHeadroomShowsItsLifetimeSummary(t *testing.T) {
 	if _, ok := headroomTotal(filepath.Join(t.TempDir(), "missing.json")); ok {
 		t.Fatal("missing file reported savings")
 	}
+	renamed := filepath.Join(t.TempDir(), "proxy_savings.json")
+	if err := os.WriteFile(renamed, []byte(`{"totals":{"saved":5}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := headroomTotal(renamed); ok {
+		t.Fatalf("unknown schema reported %+v", got)
+	}
 }
 
 func TestRTKSavingsCountOnlyDaysInTheWindow(t *testing.T) {

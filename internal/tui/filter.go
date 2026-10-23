@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -114,18 +115,23 @@ func markOccurrences(text, needle []rune, marked []bool) {
 
 func markedRanges(text []rune, marked []bool, style lipgloss.Style) []lipgloss.Range {
 	var ranges []lipgloss.Range
-	column := 0
-	for i, r := range text {
-		width := ansi.StringWidth(string(r))
-		if marked[i] {
-			last := len(ranges) - 1
-			if last >= 0 && ranges[last].End == column {
-				ranges[last].End += width
-			} else {
-				ranges = append(ranges, lipgloss.NewRange(column, column+width, style))
-			}
+	rest, column, index := string(text), 0, 0
+	for rest != "" {
+		cluster, width := ansi.FirstGraphemeCluster(rest, ansi.GraphemeWidth)
+		runes := utf8.RuneCountInString(cluster)
+		if slices.Contains(marked[index:index+runes], true) {
+			ranges = extendRanges(ranges, column, width, style)
 		}
-		column += width
+		rest, column, index = rest[len(cluster):], column+width, index+runes
 	}
 	return ranges
+}
+
+func extendRanges(ranges []lipgloss.Range, column, width int, style lipgloss.Style) []lipgloss.Range {
+	last := len(ranges) - 1
+	if last >= 0 && ranges[last].End == column {
+		ranges[last].End += width
+		return ranges
+	}
+	return append(ranges, lipgloss.NewRange(column, column+width, style))
 }

@@ -7,12 +7,17 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
-const SummaryLimit = 240
+const (
+	FailedPrefix  = "FAILED "
+	SummaryLimit  = 240
+	clipScanBytes = SummaryLimit * 2 * utf8.UTFMax
+)
 
 func Clip(text string) string {
-	runes := []rune(text)
+	runes := []rune(leadingBytes(text, clipScanBytes))
 	if len(runes) > SummaryLimit*2 {
 		runes = runes[:SummaryLimit*2]
 	}
@@ -24,9 +29,19 @@ func Clip(text string) string {
 	return string(runes)
 }
 
+func leadingBytes(text string, limit int) string {
+	if len(text) <= limit {
+		return text
+	}
+	for limit > 0 && !utf8.RuneStart(text[limit]) {
+		limit--
+	}
+	return text[:limit]
+}
+
 func failedPrefix(failed bool) string {
 	if failed {
-		return "FAILED "
+		return FailedPrefix
 	}
 	return ""
 }
@@ -127,6 +142,18 @@ func Tokens(n int64) string {
 func Dollars(usd float64) string {
 	if usd < 0.01 && usd > 0 {
 		return fmt.Sprintf("$%.4f", usd)
+	}
+	return fmt.Sprintf("$%.2f", usd)
+}
+
+const (
+	subCent      = 0.01
+	subCentLabel = "<$0.01"
+)
+
+func ShortDollars(usd float64) string {
+	if usd > 0 && usd < subCent {
+		return subCentLabel
 	}
 	return fmt.Sprintf("$%.2f", usd)
 }

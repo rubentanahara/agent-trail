@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"image/color"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -13,30 +15,34 @@ import (
 )
 
 const (
-	borderAndTitle   = 2
-	minLeftWidth     = 30
-	maxLeftWidth     = 50
-	leftPercent      = 32
-	eventsPercent    = 55
-	minPaneHeight    = 5
-	minBoxHeight     = 3
-	infoRows         = 15
-	hideLeftBelow    = 70
-	whoWidth         = 16
-	kindWidth        = 10
-	timeLayout       = "01-02 15:04:05"
-	shortIDLength    = 8
-	footerHeight     = 1
-	ellipsis         = "…"
-	activeMarker     = "▶ "
-	inactiveMarker   = "  "
-	runningGlyph     = "● "
-	closedGlyph      = "○ "
-	unknownGlyph     = "◌ "
-	minimumWidth     = 20
-	minimumHeight    = 8
-	tooSmallMessage  = "terminal too small"
-	unknownCostLabel = "not recorded"
+	borderAndTitle       = 2
+	minLeftWidth         = 30
+	maxLeftWidth         = 50
+	leftPercent          = 32
+	eventsPercent        = 55
+	minPaneHeight        = 5
+	minBoxHeight         = 3
+	infoPaneRows         = 15
+	hideLeftBelow        = 70
+	whoWidth             = 16
+	kindWidth            = 10
+	timeLayout           = "01-02 15:04:05"
+	shortIDLength        = 8
+	footerHeight         = 1
+	ellipsis             = "…"
+	activeMarker         = "▶ "
+	inactiveMarker       = "  "
+	runningGlyph         = "● "
+	closedGlyph          = "○ "
+	unknownGlyph         = "◌ "
+	finishedGlyph        = "✓ "
+	middleBranch         = "├ "
+	lastBranch           = "└ "
+	minimumWidth         = 20
+	minimumHeight        = 8
+	tooSmallMessage      = "terminal too small"
+	billingNotRecorded   = "not recorded"
+	everyRepositoryLabel = "every repository"
 )
 
 var (
@@ -75,7 +81,7 @@ func (m model) layout() geometry {
 	if g.showLeft {
 		g.leftW = max(minLeftWidth, min(m.width*leftPercent/100, maxLeftWidth))
 		g.rightW = m.width - g.leftW
-		g.sessionsH, g.infoH = split(bodyH, min(infoRows, bodyH/2))
+		g.sessionsH, g.infoH = split(bodyH, min(infoPaneRows, bodyH/2))
 	}
 	g.eventsH, g.detailH = split(bodyH, bodyH-max(minPaneHeight, bodyH*eventsPercent/100))
 	return g
@@ -122,19 +128,19 @@ func (m model) render() string {
 	if m.width < minimumWidth || m.height < minimumHeight {
 		return tooSmallMessage
 	}
-	if m.showStats {
+	if m.statsScreen.shown {
 		return m.renderStats()
 	}
 	g := m.layout()
 	right := stack(
-		box(m.eventsTitle(), m.eventRows(g.rightW-2, g.eventsH-borderAndTitle-1), g.rightW, g.eventsH, m.focus == eventsPane),
-		box(m.detailTitle(), strings.Split(m.detail.View(), "\n"), g.rightW, g.detailH, m.focus == detailPane),
+		paneBox{m.eventsTitle(), m.eventRows(g.rightW-2, g.eventsH-borderAndTitle-1), g.rightW, g.eventsH, m.borderFor(eventsPane)}.render(),
+		paneBox{m.detailTitle(), strings.Split(m.detail.View(), "\n"), g.rightW, g.detailH, m.borderFor(detailPane)}.render(),
 	)
 	body := right
 	if g.showLeft {
 		left := stack(
-			box(m.sessionsTitle(), m.sessionRows(g.leftW-2, g.sessionsH-borderAndTitle-1), g.leftW, g.sessionsH, m.focus == sessionsPane),
-			box(m.infoTitle(), m.infoRows(), g.leftW, g.infoH, false),
+			paneBox{m.sessionsTitle(), m.sessionRows(g.leftW-2, g.sessionsH-borderAndTitle-1), g.leftW, g.sessionsH, m.borderFor(sessionsPane)}.render(),
+			paneBox{m.infoTitle(), m.infoRows(), g.leftW, g.infoH, idleColour}.render(),
 		)
 		body = lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 	}
@@ -155,7 +161,23 @@ func stack(boxes ...string) string {
 	return lipgloss.JoinVertical(lipgloss.Left, drawn...)
 }
 
-func box(title string, rows []string, width, height int, focused bool) string {
+type paneBox struct {
+	title  string
+	rows   []string
+	width  int
+	height int
+	border color.Color
+}
+
+func (m model) borderFor(target pane) color.Color {
+	if m.focus == target {
+		return focusColour
+	}
+	return idleColour
+}
+
+func (b paneBox) render() string {
+	title, rows, width, height := b.title, b.rows, b.width, b.height
 	innerW, innerH := width-2, height-2
 	if innerW <= 0 || innerH <= 0 {
 		return ""
@@ -171,11 +193,7 @@ func box(title string, rows []string, width, height int, focused bool) string {
 	for len(lines) < innerH {
 		lines = append(lines, strings.Repeat(" ", innerW))
 	}
-	border := idleColour
-	if focused {
-		border = focusColour
-	}
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(border).Render(strings.Join(lines, "\n"))
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(b.border).Render(strings.Join(lines, "\n"))
 }
 
 func fit(line string, width int) string {
@@ -193,7 +211,7 @@ func (m model) sessionsTitle() string {
 		title += promptStyle.Render(" · running only")
 	}
 	if m.focus == sessionsPane {
-		title += faintStyle.Render(" ↑↓ pick · enter open · x delete")
+		title += faintStyle.Render(" ↑↓ pick · enter events · c continue · x delete")
 	}
 	return title
 }
@@ -213,7 +231,7 @@ func (m model) eventsTitle() string {
 func (m model) runningCount() int {
 	running := 0
 	for _, key := range m.order {
-		if m.sessions[key].Liveness == trail.LivenessRunning {
+		if session := m.sessions[key]; !m.isChild(session) && session.Liveness == trail.LivenessRunning {
 			running++
 		}
 	}
@@ -271,7 +289,7 @@ func styledEventBody(event trail.Event) string {
 		kind, summary = promptStyle.Render(kind), promptStyle.Render(summary)
 	case event.Kind == trail.KindUsage:
 		kind, summary = faintStyle.Render(kind), faintStyle.Render(summary)
-	case strings.HasPrefix(summary, "FAILED"):
+	case strings.HasPrefix(summary, trail.FailedPrefix):
 		summary = failedStyle.Render(summary)
 	default:
 		kind = cliStyle(event.CLI).Render(kind)
@@ -282,10 +300,8 @@ func styledEventBody(event trail.Event) string {
 func (m model) sessionRows(width, rows int) []string {
 	all := fmt.Sprintf("%sAll sessions", marker(m.activeSession == ""))
 	lines := []string{spread(all, fmt.Sprintf("%d ev", len(m.events)), width)}
-	for _, key := range m.order {
-		session := m.sessions[key]
-		label := marker(key == m.activeSession) + cliStyle(session.CLI).Render(stateGlyph(session)) + m.sessionQuery.highlight(sessionLabel(session), matchStyle)
-		lines = append(lines, spread(label, faintStyle.Render(fmt.Sprintf("%4s ", age(session.Last)))+sessionMetric(session), width))
+	for row, key := range m.order {
+		lines = append(lines, spread(m.sessionLabelRow(row, key), faintStyle.Render(fmt.Sprintf("%4s ", age(m.familyLast(key))))+sessionMetric(m.familySession(key)), width))
 	}
 	out := make([]string, 0, max(0, rows))
 	for row := m.sessionTop; row < len(lines) && len(out) < rows; row++ {
@@ -296,6 +312,38 @@ func (m model) sessionRows(width, rows int) []string {
 		out = append(out, line)
 	}
 	return out
+}
+
+func (m model) sessionLabelRow(row int, key string) string {
+	session := m.sessions[key]
+	name := m.sessionQuery.highlight(sessionLabel(session), matchStyle)
+	if !m.isChild(session) {
+		return marker(key == m.activeSession) + cliStyle(session.CLI).Render(stateGlyph(session)) + name + m.projectHint(session)
+	}
+	return marker(key == m.activeSession) + faintStyle.Render(m.branchGlyph(row)) + cliStyle(session.CLI).Render(stateGlyph(session)) + name + faintStyle.Render(" · "+session.Agent)
+}
+
+func (m model) branchGlyph(row int) string {
+	next := row + 1
+	if next < len(m.order) && m.sessions[m.order[next]].Parent == m.sessions[m.order[row]].Parent {
+		return middleBranch
+	}
+	return lastBranch
+}
+
+func (m model) projectHint(session trail.Session) string {
+	if m.context.Repo != trail.EveryRepository || session.Cwd == "" {
+		return ""
+	}
+	return faintStyle.Render(" · " + filepath.Base(session.Cwd))
+}
+
+func (m model) familySession(key string) trail.Session {
+	merged := m.sessions[key]
+	for _, child := range m.children[key] {
+		merged = merged.WithUsageOf(m.sessions[child])
+	}
+	return merged
 }
 
 func marker(active bool) string {
@@ -328,6 +376,9 @@ func shortID(id string) string {
 }
 
 func stateGlyph(session trail.Session) string {
+	if session.Finished && session.Liveness != trail.LivenessRunning {
+		return finishedGlyph
+	}
 	switch session.Liveness {
 	case trail.LivenessRunning:
 		return runningGlyph
@@ -335,230 +386,6 @@ func stateGlyph(session trail.Session) string {
 		return closedGlyph
 	}
 	return unknownGlyph
-}
-
-func sessionMetric(session trail.Session) string {
-	if session.CLI == trail.Copilot && session.Billing != trail.BillingAPI && session.PremiumRequests > 0 {
-		return fmt.Sprintf("%g req", session.PremiumRequests)
-	}
-	if session.PricedCalls == 0 {
-		return trail.Tokens(session.Tokens.Output) + " out"
-	}
-	if session.Billing == trail.BillingAPI {
-		return apiStyle.Render(trail.Dollars(session.Tokens.CostUSD) + " API")
-	}
-	return "~" + trail.Dollars(session.Tokens.CostUSD)
-}
-
-func stateLine(session trail.Session) string {
-	activity := optional(" · ", session.Activity)
-	switch session.Liveness {
-	case trail.LivenessRunning:
-		return runningStyle.Render("running"+activity) + optional(" · pid ", pidText(session.PID))
-	case trail.LivenessClosed:
-		return "closed"
-	}
-	return "open or closed not recorded by " + string(session.CLI) + activity
-}
-
-func pidText(pid int) string {
-	if pid <= 0 {
-		return ""
-	}
-	return fmt.Sprintf("%d", pid)
-}
-
-func (m model) infoTitle() string {
-	if session, ok := m.sessions[m.sessionKeyAt(m.sessionCursor)]; ok {
-		return "Session " + shortID(session.ID)
-	}
-	return "Totals"
-}
-
-func (m model) infoRows() []string {
-	session, ok := m.sessions[m.sessionKeyAt(m.sessionCursor)]
-	if !ok {
-		return m.totalRows()
-	}
-	rows := []string{
-		field("Name", sessionLabel(session)),
-		field("State", stateLine(session)),
-		field("CLI", string(session.CLI)+optional(" · agent ", session.Agent)),
-		field("Subagents", strings.Join(session.Subagents, ", ")),
-		field("Model", session.Model),
-		field("Branch", session.Branch),
-		field("Mode", session.Permission),
-		field("Billing", billingLabel(session)),
-		field("Active", activeSpan(session)),
-		field("Tokens", tokenLine(session.Tokens)),
-		field("Cost", costLine(session)),
-		field("Reported", reportedLine(session)),
-		field("Limits", limitsLine(session)),
-		field("Lines", linesLine(session)),
-		field("Events", fmt.Sprintf("%d · %d model calls", session.Events, session.Calls)),
-	}
-	return nonEmpty(rows)
-}
-
-func (m model) totalRows() []string {
-	var tokens trail.Usage
-	var apiCost, equivalentCost, premium float64
-	perCLI := map[trail.CLI]int{}
-	for _, key := range m.order {
-		session := m.sessions[key]
-		perCLI[session.CLI]++
-		tokens.Input += session.Tokens.Input
-		tokens.CacheRead += session.Tokens.CacheRead
-		tokens.CacheWrite += session.Tokens.CacheWrite
-		tokens.Output += session.Tokens.Output
-		premium += session.PremiumRequests
-		if session.Billing == trail.BillingAPI {
-			apiCost += session.Tokens.CostUSD
-		} else {
-			equivalentCost += session.Tokens.CostUSD
-		}
-	}
-	return nonEmpty([]string{
-		field("Repo", m.context.Repo),
-		field("Running", fmt.Sprintf("%d sessions", m.runningCount())),
-		field("Sessions", fmt.Sprintf("claude %d · codex %d · copilot %d", perCLI[trail.Claude], perCLI[trail.Codex], perCLI[trail.Copilot])),
-		field("Tokens", tokenLine(tokens)),
-		field("API billed", nonZeroDollars(apiCost)),
-		field("Subscription", nonZeroDollars(equivalentCost)+optional("", ifPositive(equivalentCost, " API-equivalent"))),
-		field("Copilot", ifPositive(premium, fmt.Sprintf("%g premium requests", premium))),
-		field("Events", fmt.Sprintf("%d", len(m.events))),
-		field("Prices", m.pricesLine()),
-		field("Legend", strings.TrimSpace(runningGlyph+"running "+closedGlyph+"closed "+unknownGlyph+"not recorded")),
-	})
-}
-
-func firstNonEmptyText(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
-func (m model) pricesLine() string {
-	if m.context.PriceWarning != "" {
-		return failedStyle.Render(m.context.PriceWarning)
-	}
-	if m.context.PricesAsOf == "" {
-		return failedStyle.Render("none loaded, costs not shown")
-	}
-	return faintStyle.Render("LiteLLM list, " + m.context.PricesAsOf)
-}
-
-func reportedLine(session trail.Session) string {
-	if !session.HasReportedCost {
-		return ""
-	}
-	return trail.Dollars(session.ReportedCostUSD) + " by Claude Code"
-}
-
-func field(label, value string) string {
-	if strings.TrimSpace(value) == "" {
-		return ""
-	}
-	return labelStyle.Render(fmt.Sprintf("%-9s", label)) + " " + value
-}
-
-func nonEmpty(rows []string) []string {
-	out := rows[:0]
-	for _, row := range rows {
-		if row != "" {
-			out = append(out, row)
-		}
-	}
-	return out
-}
-
-func optional(prefix, value string) string {
-	if value == "" {
-		return ""
-	}
-	return prefix + value
-}
-
-func ifPositive(amount float64, text string) string {
-	if amount <= 0 {
-		return ""
-	}
-	return text
-}
-
-func nonZeroDollars(amount float64) string {
-	return ifPositive(amount, trail.Dollars(amount))
-}
-
-func billingLabel(session trail.Session) string {
-	switch session.Billing {
-	case trail.BillingAPI:
-		return apiStyle.Render("API key" + optional(" · ", session.Plan))
-	case trail.BillingSubscription:
-		return "subscription" + optional(" · ", session.Plan)
-	}
-	return unknownCostLabel
-}
-
-func activeSpan(session trail.Session) string {
-	if session.Start.IsZero() {
-		return ""
-	}
-	span := strings.TrimSuffix(session.Last.Sub(session.Start).Round(time.Minute).String(), "0s")
-	return fmt.Sprintf("%s → %s (%s)", session.Start.Local().Format("01-02 15:04"), session.Last.Local().Format("15:04"), firstNonEmptyText(span, "<1m"))
-}
-
-func tokenLine(u trail.Usage) string {
-	if u.Input == 0 && u.Output == 0 {
-		return ""
-	}
-	return fmt.Sprintf("in %s (cache %s/%s) · out %s", trail.Tokens(u.Input), trail.Tokens(u.CacheRead), trail.Tokens(u.CacheWrite), trail.Tokens(u.Output)) +
-		optional(" · think ", tokensIfPositive(u.Reasoning))
-}
-
-func tokensIfPositive(n int64) string {
-	if n <= 0 {
-		return ""
-	}
-	return trail.Tokens(n)
-}
-
-func costLine(session trail.Session) string {
-	if session.PricedCalls == 0 {
-		return ""
-	}
-	cost := trail.Dollars(session.Tokens.CostUSD)
-	if session.PricedCalls < session.Calls {
-		cost += fmt.Sprintf(" (%d calls unpriced)", session.Calls-session.PricedCalls)
-	}
-	if session.Billing == trail.BillingAPI {
-		return apiStyle.Render(cost + " billed to API key")
-	}
-	return "~" + cost + " API-equivalent"
-}
-
-func limitsLine(session trail.Session) string {
-	var parts []string
-	if session.HasRateLimit {
-		parts = append(parts, fmt.Sprintf("rate limit %.0f%% used", session.RateLimitPercent))
-	}
-	if session.HasContext {
-		parts = append(parts, fmt.Sprintf("context %.0f%%", session.ContextPercent))
-	}
-	if session.PremiumRequests > 0 {
-		parts = append(parts, fmt.Sprintf("%g premium requests", session.PremiumRequests))
-	}
-	return strings.Join(parts, " · ")
-}
-
-func linesLine(session trail.Session) string {
-	if session.LinesAdded == 0 && session.LinesRemoved == 0 {
-		return ""
-	}
-	return fmt.Sprintf("+%d −%d", session.LinesAdded, session.LinesRemoved)
 }
 
 func (m model) detailTitle() string {
@@ -640,7 +467,7 @@ func (m model) footer() string {
 	case m.notice != "":
 		return promptStyle.Render(m.notice)
 	}
-	status := faintStyle.Render(strings.Join([]string{"1 2 3/tab panes", "/ filter pane", "z " + zoomAction(m.zoomed), "o running only", "t stats", "enter open", "s event's session", "a all", "n " + shownOrHidden(!m.hideNoise) + " noise", "u usage", "r raw", "f follow", "q quit"}, "  "))
+	status := faintStyle.Render(strings.Join([]string{"1 2 3/tab panes", "/ filter pane", "c continue session", "z " + zoomAction(m.zoomed), "o running only", "m " + shownOrHidden(m.hideAutomated) + " automated", "t stats", "enter open", "s event's session", "a all", "n " + shownOrHidden(!m.hideNoise) + " noise", "u usage", "r raw", "f follow", "q quit"}, "  "))
 	if text := m.filterText[m.focus]; text != "" {
 		status = promptStyle.Render("filter: "+text+" (esc clears)") + "  " + status
 	}

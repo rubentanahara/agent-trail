@@ -212,6 +212,9 @@ func TestHighlightMarksTheMatchedCharacters(t *testing.T) {
 		{"!user", "user", "user"},
 		{"zz", "fizz buzz", "fi[zz] buzz"},
 		{"zq", "fizz buzz", "fizz buzz"},
+		{"'abc", "⚠️ abc", "⚠️ [abc]"},
+		{"'abc", "👨‍👩‍👧 abc", "👨‍👩‍👧 [abc]"},
+		{"'ab", "日本 ab", "日本 [ab]"},
 	}
 	for _, c := range cases {
 		if got := ansi.Strip(parseQuery(c.query).highlight(c.line, brackets)); got != c.want {
@@ -293,7 +296,7 @@ func TestStatsScreenFitsTheTerminal(t *testing.T) {
 			t.Fatalf("line too wide: %q", ansi.Strip(line))
 		}
 	}
-	if m = press(m, "esc"); m.showStats {
+	if m = press(m, "esc"); m.statsScreen.shown {
 		t.Fatal("esc did not leave the stats screen")
 	}
 }
@@ -329,5 +332,112 @@ func TestStatsShowsSavingsAndTogglesAutomatedSessions(t *testing.T) {
 	}
 	if screen = ansi.Strip(press(m, "a").render()); strings.Contains(screen, "automated sessions hidden") || !strings.Contains(screen, "codex ") {
 		t.Fatalf("a did not show automated sessions:\n%s", screen)
+	}
+}
+
+func agentBatch() trail.Batch {
+	batch := sampleBatch()
+	at := time.Date(2026, 10, 22, 10, 0, 0, 0, time.UTC)
+	batch.Sessions = append(batch.Sessions,
+		trail.Session{Key: "claude:a/x1", ID: "x1", Parent: "claude:a", CLI: trail.Claude, Name: "Review the code", Agent: "reviewer", Events: 1, Start: at.Add(5 * time.Second), Last: at.Add(9 * time.Second), Liveness: trail.LivenessRunning, Tokens: trail.Usage{CostUSD: 2}, PricedCalls: 1, Calls: 1},
+		trail.Session{Key: "claude:a/x2", ID: "x2", Parent: "claude:a", CLI: trail.Claude, Name: "Find the docs", Agent: "web-fetch", Events: 1, Start: at.Add(6 * time.Second), Last: at.Add(7 * time.Second), Finished: true},
+	)
+	batch.Sessions[0].Tokens.CostUSD = 1
+	batch.Events = append(batch.Events,
+		trail.Event{Time: at.Add(6 * time.Second), CLI: trail.Claude, Agent: "reviewer", Session: "claude:a/x1", Kind: trail.KindAssistant, Summary: "reviewing"},
+		trail.Event{Time: at.Add(7 * time.Second), CLI: trail.Claude, Agent: "web-fetch", Session: "claude:a/x2", Kind: trail.KindAssistant, Summary: "fetching"},
+	)
+	return batch
+}
+
+func TestAgentsAreListedUnderTheirParentSession(t *testing.T) {
+	m := sized(newModel(nil, agentBatch(), Context{Repo: "/repo"}), 160, 40)
+	if got := strings.Join(m.order, ","); got != "claude:a,claude:a/x1,claude:a/x2,codex:b" {
+		t.Fatalf("order = %s", got)
+	}
+	screen := ansi.Strip(m.render())
+	for _, want := range []string{"├ ● Review the code · reviewer", "└ ✓ Find the docs · web-fetch", "$3.00 API"} {
+		if !strings.Contains(screen, want) {
+			t.Fatalf("missing %q:\n%s", want, screen)
+		}
+	}
+}
+
+func TestSelectingAParentShowsItsAgentsEventsAndSelectingAnAgentShowsOnlyIts(t *testing.T) {
+	m := sized(newModel(nil, agentBatch(), Context{Repo: "/repo"}), 160, 40)
+	m = press(m, "1", "down")
+	if got := strings.Join(visibleSummaries(m), ","); got != "fix the login,claude-opus-5-5 in 10 out 5,reviewing,fetching" {
+		t.Fatalf("parent events = %q", got)
+	}
+	m = press(m, "down", "down")
+	if got := strings.Join(visibleSummaries(m), ","); got != "fetching" || m.activeSession != "claude:a/x2" {
+		t.Fatalf("agent events = %q active = %s", got, m.activeSession)
+	}
+}
+
+func TestFinishedAgentsCollapseUnderAClosedParentUntilItIsSelected(t *testing.T) {
+	batch := agentBatch()
+	batch.Sessions[2].Liveness = trail.LivenessClosed
+	m := sized(newModel(nil, batch, Context{Repo: "/repo"}), 160, 40)
+	if got := strings.Join(m.order, ","); got != "claude:a,codex:b" {
+		t.Fatalf("collapsed order = %s", got)
+	}
+	m = press(m, "1", "down")
+	if got := strings.Join(m.order, ","); got != "claude:a,claude:a/x1,claude:a/x2,codex:b" || m.sessionCursor != 1 {
+		t.Fatalf("expanded order = %s cursor = %d", got, m.sessionCursor)
+	}
+	m = press(m, "down", "down", "down")
+	if m.activeSession != "codex:b" || m.sessionCursor != 2 {
+		t.Fatalf("after leaving the family: active = %s cursor = %d order = %v", m.activeSession, m.sessionCursor, m.order)
+	}
+}
+
+func TestAgentsAreDeletedOnlyWithTheirParent(t *testing.T) {
+	m := sized(newModel(nil, agentBatch(), Context{Repo: "/repo"}), 160, 40)
+	m = press(m, "1", "down", "down", "x")
+	if m.confirmDelete != "" || !strings.Contains(m.notice, "parent") {
+		t.Fatalf("confirm = %q notice = %q", m.confirmDelete, m.notice)
+	}
+	updated, _ := m.Update(deletedMsg{key: "claude:a", label: "login"})
+	m = updated.(model)
+	if len(m.sessions) != 1 || len(m.events) != 2 {
+		t.Fatalf("sessions = %v events = %d", m.sessions, len(m.events))
+	}
+}
+
+func TestContinueOpensTheParentSessionAndRefusesARunningOne(t *testing.T) {
+	m := sized(newModel(nil, agentBatch(), Context{Repo: "/repo"}), 160, 40)
+	m = press(m, "1", "down", "down")
+	target, ok := m.resumeTarget()
+	if !ok || target.Key != "claude:a" {
+		t.Fatalf("target = %+v", target)
+	}
+	if got := strings.Join(trail.ResumeCommand(target), " "); got != "claude --resume a" {
+		t.Fatalf("command = %q", got)
+	}
+	if cmd := m.resume(); cmd == nil {
+		t.Fatalf("closed session not opened: %q", m.notice)
+	}
+	batch := agentBatch()
+	batch.Sessions[0].Liveness, batch.Sessions[0].PID = trail.LivenessRunning, 42
+	m = press(sized(newModel(nil, batch, Context{Repo: "/repo"}), 160, 40), "1", "down")
+	if cmd := m.resume(); cmd != nil || !strings.Contains(m.notice, "already open in pid 42") {
+		t.Fatalf("running session: notice = %q", m.notice)
+	}
+}
+
+func TestEveryRepositoryHidesAutomatedSessionsUntilShown(t *testing.T) {
+	batch := sampleBatch()
+	batch.Sessions[1].Automated, batch.Sessions[1].Cwd = true, "/work/tests"
+	batch.Sessions[0].Cwd = "/work/login"
+	m := sized(newModel(nil, batch, Context{Repo: trail.EveryRepository}), 160, 40)
+	if got := strings.Join(m.order, ","); got != "claude:a" || len(m.visible) != 2 {
+		t.Fatalf("order = %s visible = %d", got, len(m.visible))
+	}
+	if screen := ansi.Strip(m.render()); !strings.Contains(screen, "login · login") || !strings.Contains(screen, "every repository") {
+		t.Fatalf("project hint or repo label missing:\n%s", screen)
+	}
+	if m = press(m, "m"); len(m.order) != 2 || len(m.visible) != 4 {
+		t.Fatalf("after m: order = %v visible = %d", m.order, len(m.visible))
 	}
 }

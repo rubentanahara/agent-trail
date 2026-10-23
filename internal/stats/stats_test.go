@@ -81,3 +81,28 @@ func TestAutomatedSessionsAreHiddenUntilShown(t *testing.T) {
 		t.Fatalf("shown: rows = %+v", rows)
 	}
 }
+
+func TestAveragesNeedAWindowAtLeastAsLongAsThePeriod(t *testing.T) {
+	s := New(now.Add(-2 * time.Hour))
+	s.Add(sample(t.TempDir()))
+	spend := s.Spend(now)
+	if !spend[1].HasAverage || spend[2].HasAverage || spend[4].HasAverage {
+		t.Fatalf("spend = %+v", spend)
+	}
+}
+
+func TestTheCurrentHourStartsOnTheLocalHour(t *testing.T) {
+	india := time.FixedZone("IST", 5*3600+1800)
+	at := time.Date(2026, 10, 22, 10, 45, 0, 0, india)
+	s := New(at.AddDate(0, 0, -30))
+	s.Add(trail.Batch{
+		Sessions: []trail.Session{{Key: "claude:a", CLI: trail.Claude}},
+		Events: []trail.Event{
+			{Session: "claude:a", Kind: trail.KindUsage, Time: at.Add(-50 * time.Minute), Usage: &trail.Usage{CostUSD: 1, Priced: true}},
+			{Session: "claude:a", Kind: trail.KindUsage, Time: at.Add(-30 * time.Minute), Usage: &trail.Usage{CostUSD: 2, Priced: true}},
+		},
+	})
+	if hour := s.Spend(at)[1]; hour.Current != 2 {
+		t.Fatalf("hour = %+v", hour)
+	}
+}

@@ -14,6 +14,7 @@ import (
 
 const (
 	codexIDLength       = 36
+	maxIndexLine        = 1 << 20
 	codexUserThread     = "user"
 	codexExecSource     = "exec"
 	percentScale        = 100
@@ -289,14 +290,14 @@ func codexCommand(raw json.RawMessage) string {
 
 func codexCommandStatus(item codexItem) string {
 	if item.ExitCode != nil && *item.ExitCode != 0 {
-		return fmt.Sprintf("FAILED exit %d ", *item.ExitCode)
+		return fmt.Sprintf(FailedPrefix+"exit %d ", *item.ExitCode)
 	}
 	if item.ExitCode == nil && item.Status != "completed" {
 		status := item.Status
 		if status == "" {
 			status = "no exit code"
 		}
-		return "FAILED " + status + " "
+		return FailedPrefix + status + " "
 	}
 	return ""
 }
@@ -347,7 +348,7 @@ func codexCandidates(home string) []string {
 
 func codexThreadNames(home string) map[string]string {
 	names := map[string]string{}
-	file, err := os.Open(filepath.Join(home, ".codex", "session_index.jsonl"))
+	file, err := os.Open(codexIndexPath(home))
 	if err != nil {
 		return names
 	}
@@ -366,4 +367,6 @@ func codexThreadNames(home string) map[string]string {
 	return names
 }
 
-const maxIndexLine = 1 << 20
+func codexIndexPath(home string) string {
+	return filepath.Join(home, ".codex", "session_index.jsonl")
+}

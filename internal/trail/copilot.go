@@ -2,6 +2,7 @@ package trail
 
 import (
 	"bufio"
+	"cmp"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -133,9 +134,9 @@ func copilotUpdateSession(eventType string, data copilotData, session *Session) 
 	case "session.usage_record":
 		copilotUsageUpdate(data.Usage, session)
 	case "subagent.selected":
-		session.Agent = firstNonEmpty(data.AgentDisplayName, data.AgentName)
+		session.Agent = cmp.Or(data.AgentDisplayName, data.AgentName)
 	case "subagent.started":
-		session.addSubagent(firstNonEmpty(data.AgentDisplayName, data.AgentName))
+		session.addSubagent(cmp.Or(data.AgentDisplayName, data.AgentName))
 	case "assistant.turn_start":
 		session.TurnOpen = true
 	case "assistant.turn_end", "abort":
@@ -208,7 +209,7 @@ func copilotKindAndText(eventType string, data copilotData) (Kind, string) {
 	case "session.usage_record":
 		return KindUsage, "usage"
 	case "subagent.selected", "subagent.started", "subagent.completed", "subagent.failed":
-		return KindAgent, strings.TrimPrefix(eventType, "subagent.") + " " + firstNonEmpty(data.AgentDisplayName, data.AgentName)
+		return KindAgent, strings.TrimPrefix(eventType, "subagent.") + " " + cmp.Or(data.AgentDisplayName, data.AgentName)
 	}
 	return "", ""
 }
@@ -237,14 +238,14 @@ func copilotResultText(data copilotData) string {
 	if json.Unmarshal(data.Result, &result) == nil {
 		output = rawText(result.Content)
 	}
-	return failedPrefix(!data.Success) + firstNonEmpty(failure.Message, output)
+	return failedPrefix(!data.Success) + cmp.Or(failure.Message, output)
 }
 
 func copilotPermissionText(request *copilotPermission) string {
 	if request == nil {
 		return " "
 	}
-	return request.Kind + " " + request.Intention + " " + firstNonEmpty(request.FullCommandText, request.FileName)
+	return request.Kind + " " + request.Intention + " " + cmp.Or(request.FullCommandText, request.FileName)
 }
 
 func copilotDecision(raw json.RawMessage) string {
@@ -260,15 +261,6 @@ func okOrFailed(success bool) string {
 		return "ok"
 	}
 	return "failed"
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
-	}
-	return ""
 }
 
 func copilotWorkspace(eventsPath string) map[string]string {
