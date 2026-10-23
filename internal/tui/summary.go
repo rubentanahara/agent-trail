@@ -21,6 +21,8 @@ const (
 	summaryMaxChars     = 400_000
 	summaryMaxBudgetUSD = "0.25"
 	summaryAlias        = "haiku"
+	summaryBinary       = "claude"
+	summaryWaitDelay    = 5 * time.Second
 	summaryHooksOff     = `{"disableAllHooks":true}`
 	summarySelectNotice = "select a session to summarize"
 	summaryPending      = "summarizing…"
@@ -58,7 +60,7 @@ type summaryMsg struct {
 
 func (m *model) toggleSummary() tea.Cmd {
 	s := &m.summary
-	if s.shown {
+	if s.shown && s.key == m.activeSession {
 		s.shown = false
 		m.refreshDetail()
 		return nil
@@ -171,11 +173,28 @@ func decodeSummary(stdout []byte) (summaryResult, error) {
 	return summaryResult{Text: strings.TrimSpace(out.Result), CostUSD: out.CostUSD}, nil
 }
 
+func commandFailure(runErr error, stderr string) error {
+	if text := strings.TrimSpace(stderr); text != "" {
+		return errors.New(text)
+	}
+	return runErr
+}
+
 func runClaude(prompt string) (summaryResult, error) {
+	return runSummaryCommand(summaryBinary, prompt)
+}
+
+func summaryCommand(ctx context.Context, name string) *exec.Cmd {
+	command := exec.CommandContext(ctx, name, summaryArgs()...)
+	command.Dir = os.TempDir()
+	command.WaitDelay = summaryWaitDelay
+	return command
+}
+
+func runSummaryCommand(name, prompt string) (summaryResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), summaryTimeout)
 	defer cancel()
-	command := exec.CommandContext(ctx, "claude", summaryArgs()...)
-	command.Dir = os.TempDir()
+	command := summaryCommand(ctx, name)
 	command.Stdin = strings.NewReader(prompt)
 	var stdout, stderr bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, &stderr
@@ -183,8 +202,8 @@ func runClaude(prompt string) (summaryResult, error) {
 	if ctx.Err() != nil {
 		return summaryResult{}, errors.New("claude did not answer within " + summaryTimeout.String())
 	}
-	if text := strings.TrimSpace(stderr.String()); runErr != nil && text != "" {
-		return summaryResult{}, errors.New(text)
+	if runErr != nil {
+		return summaryResult{}, commandFailure(runErr, stderr.String())
 	}
 	return decodeSummary(stdout.Bytes())
 }

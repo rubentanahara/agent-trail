@@ -189,10 +189,18 @@ func (m *model) filesKey(key string) (tea.Cmd, bool) {
 	return nil, false
 }
 
+func scrollDiff(diff *viewport.Model, delta int) {
+	if delta < 0 {
+		diff.ScrollUp(-delta)
+		return
+	}
+	diff.ScrollDown(delta)
+}
+
 func (m *model) moveInFiles(delta int) tea.Cmd {
 	screen := &m.filesScreen
 	if screen.diffFocus {
-		screen.diff.ScrollDown(delta)
+		scrollDiff(&screen.diff, delta)
 		return nil
 	}
 	return m.pickFile(screen.cursor + delta)

@@ -94,3 +94,21 @@ func TestFilesScreenFitsTheTerminal(t *testing.T) {
 		}
 	}
 }
+
+func TestUpScrollsTheFocusedDiffBackFromTheBottom(t *testing.T) {
+	m := press(filesModel(120), "d", "enter")
+	lines := make([]string, 200)
+	for i := range lines {
+		lines[i] = "+line"
+	}
+	at := time.Date(2026, 10, 22, 10, 0, 0, 0, time.UTC)
+	blocks := []patchBlock{{event: editEvent(at, "claude:a", "", "/repo/main.go", 200, 0), lines: lines}}
+	updated, _ := m.Update(filePatchesMsg{path: m.filesScreen.files[0].path, blocks: blocks})
+	m = updated.(model)
+	m.filesScreen.diff.GotoBottom()
+	bottom := m.filesScreen.diff.YOffset()
+	m = press(m, "up")
+	if got := m.filesScreen.diff.YOffset(); got >= bottom {
+		t.Fatalf("offset after up = %d, bottom = %d", got, bottom)
+	}
+}

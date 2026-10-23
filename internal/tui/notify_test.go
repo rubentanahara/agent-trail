@@ -159,3 +159,33 @@ func TestClosedCopilotSessionStopsWaiting(t *testing.T) {
 		t.Fatalf("after it closed: waiting = %v", keys)
 	}
 }
+
+func TestAlertTextCannotInjectTerminalEscapes(t *testing.T) {
+	t.Setenv("TMUX", "")
+	got := alertSequence("a\x1b]0;x\a\x1b\\b")
+	if want := "\a\x1b]9;a]0;x\\b is waiting for you\a"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestWSkipsWaitingSessionsHiddenFromTheList(t *testing.T) {
+	m := notifyModel(false, claudeSessionAt("claude:a", "login", "idle"), codexSessionAt("codex:b", "tests", true))
+	poll(&m, claudeSessionAt("claude:a", "login", "idle"), codexSessionAt("codex:b", "tests", false))
+	m = press(m, "o", "w", "w")
+	if m.activeSession != "claude:a" {
+		t.Fatalf("active = %q", m.activeSession)
+	}
+}
+
+func TestWDropsACodexSessionOnceTheUserWentThere(t *testing.T) {
+	m := notifyModel(false, codexSessionAt("codex:c", "docs", true))
+	poll(&m, codexSessionAt("codex:c", "docs", false))
+	m = press(m, "w")
+	if m.activeSession != "codex:c" || len(m.waitingKeys()) != 0 {
+		t.Fatalf("active = %q, waiting = %v", m.activeSession, m.waitingKeys())
+	}
+	m = press(m, "w")
+	if m.notice != "no session is waiting for you" {
+		t.Errorf("notice = %q", m.notice)
+	}
+}

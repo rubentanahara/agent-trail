@@ -101,3 +101,18 @@ func TestFoldingKeepsTheSameSessionSelectedAndScrollValid(t *testing.T) {
 		t.Fatalf("cursor = %d top = %d order = %s", m.sessionCursor, m.sessionTop, orderOf(m))
 	}
 }
+
+func TestJumpingToAFoldedAgentsEventUnfoldsItsParent(t *testing.T) {
+	m := press(foldModel(), "1", "down")
+	m = space(m)
+	m = press(m, "a")
+	for i, index := range m.visible {
+		if m.events[index].Session == "claude:a/x1" {
+			m.eventCursor = i
+		}
+	}
+	m = press(m, "s")
+	if m.activeSession != "claude:a/x1" {
+		t.Fatalf("active = %q, order = %s", m.activeSession, orderOf(m))
+	}
+}

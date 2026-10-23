@@ -596,8 +596,18 @@ func (m *model) jumpToEventSession() {
 	if index == noEvent {
 		return
 	}
+	m.revealSession(m.events[index].Session)
 	m.selectSession(m.rowOf(m.events[index].Session))
 	m.focus = eventsPane
+}
+
+func (m *model) revealSession(key string) {
+	session := m.sessions[key]
+	if !m.isChild(session) || m.expanded(session.Parent) {
+		return
+	}
+	m.folded[session.Parent] = false
+	m.reorderSessions()
 }
 
 func (m *model) paneKey(msg tea.KeyPressMsg) tea.Cmd {

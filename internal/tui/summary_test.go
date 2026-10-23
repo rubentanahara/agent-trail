@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"strings"
@@ -137,5 +138,28 @@ func TestSummaryOutputDecodesTextCostAndErrors(t *testing.T) {
 	}
 	if _, err := decodeSummary([]byte(`garbage`)); err == nil {
 		t.Fatal("garbage decoded")
+	}
+}
+
+func TestSummaryKeyOnAnotherSessionSummarizesIt(t *testing.T) {
+	runner := &fakeRunner{result: summaryResult{Text: "done"}}
+	m := pressY(summaryModel(runner))
+	m = pressY(press(m, "down"))
+	if len(runner.prompts) != 2 || !strings.HasPrefix(ansi.Strip(m.detailTitle()), "Summary: login") {
+		t.Fatalf("calls = %d, title = %q", len(runner.prompts), m.detailTitle())
+	}
+}
+
+func TestMissingClaudeBinaryReportsTheRunError(t *testing.T) {
+	_, err := runSummaryCommand("agent-trail-no-such-binary", "prompt")
+	if err == nil || !strings.Contains(err.Error(), "executable file not found") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestSummaryCommandCannotBeHeldOpenByGrandchildren(t *testing.T) {
+	command := summaryCommand(context.Background(), "claude")
+	if command.WaitDelay != summaryWaitDelay {
+		t.Fatalf("WaitDelay = %v", command.WaitDelay)
 	}
 }

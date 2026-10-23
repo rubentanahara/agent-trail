@@ -5,7 +5,9 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -96,17 +98,26 @@ func moreText(others int) string {
 }
 
 func alertSequence(name string) string {
-	desktop := ansi.Notify(name + waitingSuffix)
+	desktop := ansi.Notify(withoutControls(name) + waitingSuffix)
 	if os.Getenv("TMUX") != "" {
 		desktop = ansi.TmuxPassthrough(desktop)
 	}
 	return bellByte + desktop
 }
 
+func withoutControls(text string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, text)
+}
+
 func (m model) waitingKeys() []string {
 	var keys []string
 	for key := range m.waitingSince {
-		if session, ok := m.sessions[key]; ok && m.notifiable(session) {
+		if session, ok := m.sessions[key]; ok && m.notifiable(session) && m.rowOf(key) != allSessionsRow {
 			keys = append(keys, key)
 		}
 	}
@@ -129,6 +140,9 @@ func (m *model) goToWaiting() tea.Cmd {
 	m.selectSession(m.rowOf(next))
 	m.focus = eventsPane
 	session := m.sessions[next]
+	if session.CLI == trail.Codex {
+		delete(m.waitingSince, next)
+	}
 	if session.Liveness == trail.LivenessRunning && session.PID > 0 {
 		return m.jumpToRunning(session)
 	}
