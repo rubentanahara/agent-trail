@@ -16,6 +16,28 @@ const (
 	clipScanBytes = SummaryLimit * 2 * utf8.UTFMax
 )
 
+const cdChain = " && "
+
+var commandPrefixes = []string{"Bash command: ", "exec "}
+
+func summaryText(text, cwd string) string {
+	if cwd == "" {
+		return text
+	}
+	for _, prefix := range commandPrefixes {
+		command, found := strings.CutPrefix(text, prefix+"cd ")
+		if !found {
+			continue
+		}
+		for _, folder := range []string{cwd, `"` + cwd + `"`, "'" + cwd + "'"} {
+			if rest, dropped := strings.CutPrefix(command, folder+cdChain); dropped {
+				return prefix + rest
+			}
+		}
+	}
+	return text
+}
+
 func Clip(text string) string {
 	runes := []rune(leadingBytes(text, clipScanBytes))
 	if len(runes) > SummaryLimit*2 {

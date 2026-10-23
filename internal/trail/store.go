@@ -305,7 +305,7 @@ func (t *Trail) parseLine(line []byte, file *transcript, session *Session, at So
 	for i := range events {
 		events[i].Session = session.Key
 		events[i].Source = Source{Path: at.Path, Offset: at.Offset, Index: i}
-		events[i].Summary = Clip(events[i].Text)
+		events[i].Summary = Clip(summaryText(events[i].Text, session.Cwd))
 		events[i].Text = ""
 		session.touch(events[i].Time)
 		if events[i].Kind == KindUser && events[i].Agent == "" {

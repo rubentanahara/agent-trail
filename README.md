@@ -60,7 +60,7 @@ When stdout is not a terminal it prints the history as plain text and exits.
 | `esc` | Clear the focused pane's filter, leave the detail pane, then go back to all sessions |
 | `s` | Show only the session of the selected event |
 | `a` | Show all sessions |
-| `n` | Show or hide noise: Claude Code attachment and system rows. Hidden at start |
+| `n` | Show or hide noise: Claude Code attachment and system rows, and empty thinking rows. Hidden at start |
 | `u` | Show or hide token-usage rows |
 | `r` | Detail pane: readable text or the raw JSON record, indented and coloured |
 | `f` | Turn auto-scroll to the newest event on or off |
@@ -140,6 +140,8 @@ Output-style tools such as caveman and ponytail record no savings: there is no r
 **Sessions.** One row per session that had activity in the replay window, the most recently active first. Each row shows its state, the time since its last event, and its cost including its agents. The name is the session title the CLI generated or you set, otherwise the first prompt. When following every repository, the row also names the folder the session ran in.
 
 **Agents.** Each Claude Code subagent (a Task or Agent call, foreground or background) gets its own row under the session that started it, named by the description it was given, with its agent type. `●` means it is still running and `✓` that it finished, read from the `.meta.json` Claude Code writes beside each agent transcript. Agents are listed while their session is running or selected, and folded away otherwise. Selecting the session shows its events and every agent's; selecting an agent shows only that agent's. Codex and Copilot CLI record their subagents inside the session transcript, so they stay in the parent row and the `Subagents` field.
+
+**Commands.** A leading `cd` into the session's own folder is left out of the event list. The detail keeps the full command.
 
 **Session state.**
 

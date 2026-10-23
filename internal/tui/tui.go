@@ -116,6 +116,13 @@ var (
 	focusKeys  = map[string]pane{"1": sessionsPane, "2": eventsPane, "3": detailPane}
 )
 
+func isNoise(event trail.Event) bool {
+	if event.Kind == trail.KindThinking {
+		return event.Summary == trail.HiddenThinking
+	}
+	return noiseKinds[event.Kind]
+}
+
 func Run(follower *trail.Trail, history trail.Batch, context Context) error {
 	_, err := tea.NewProgram(newModel(follower, history, context)).Run()
 	return err
@@ -362,7 +369,7 @@ func (m model) includes(index int) bool {
 	if !m.showUsage && event.Kind == trail.KindUsage {
 		return false
 	}
-	if m.hideNoise && noiseKinds[event.Kind] {
+	if m.hideNoise && isNoise(event) {
 		return false
 	}
 	return m.filter.matches(m.haystack[index])

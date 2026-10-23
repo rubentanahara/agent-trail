@@ -28,7 +28,7 @@ const (
 	claudeCommandPrefix   = "<command-name>"
 	claudeBashPrefix      = "<bash-input>"
 	claudeInjectedPrefix  = "<"
-	hiddenThinking        = "(thinking text not returned by the API)"
+	HiddenThinking        = "(thinking text not returned by the API)"
 )
 
 var nonAlphanumeric = regexp.MustCompile(`[^a-zA-Z0-9]`)
@@ -333,7 +333,7 @@ func claudeBlockEvent(agent string, speaker Kind, block claudeBlock) (Event, boo
 	case "text":
 		return Event{Agent: agent, Kind: speaker, Text: block.Text}, true
 	case "thinking":
-		return Event{Agent: agent, Kind: KindThinking, Text: cmp.Or(block.Thinking, hiddenThinking)}, true
+		return Event{Agent: agent, Kind: KindThinking, Text: cmp.Or(block.Thinking, HiddenThinking)}, true
 	case "tool_use":
 		return Event{Agent: agent, Kind: KindTool, Text: block.Name + " " + argumentsText(block.Input), Files: pathArguments(block.Input)}, true
 	case "tool_result":
