@@ -74,6 +74,7 @@ When stdout is not a terminal it prints the history as plain text and exits.
 | `o` | Sessions pane: show only running sessions, or all again. Codex sessions never show as running (see State) |
 | `c` | Continue the selected session in its own CLI, in the folder it ran in: `claude --resume <id>`, `codex resume <id>` or `copilot --resume <id>`. agent-trail returns when you quit the CLI. On a running session inside tmux it jumps to the pane where it runs; outside tmux it says where it runs. On an agent row it opens the parent session |
 | `w` | Jump to the session that has waited for you the longest: selects it and, when it runs in tmux, switches to its pane. Press again for the next one, oldest first |
+| `y` | Summarize the selected session with Claude Haiku in the detail pane, or go back to the event detail (see Summary) |
 | `m` | Show or hide sessions started by a program (see Stats screen). Hidden at start when following every repository |
 | `x` | Sessions pane: delete the selected session and its transcript files, after you confirm with `y`. A session is refused while it is running, while a Codex or Copilot turn is open, or if its transcript changed in the last 2 minutes. Agents are deleted with their parent |
 | `t` | Open or close the stats screen (see below) |
@@ -102,6 +103,14 @@ Query syntax, the same in every pane:
 | `!attachment` | Excludes rows containing the text |
 
 Examples: `'codex 'tool`, `'failed`, `'claude/web-fetch`, `!usage`. In the sessions pane, `running` or `'api` find live sessions or API-billed ones.
+
+### Summary
+
+`y` with a session selected asks Claude Haiku for a summary of that session's conversation so far (Goal, Done, Open, Next) and shows it in the detail pane; `y` again returns to the event detail. Select a session first: with all sessions selected it only says so.
+
+- **What is sent:** the prompts you typed and the assistant's replies in full, from the session and its agents, plus one line per tool call. Tool results, thinking and token usage are not sent. At most about 400 000 characters go out, the most recent part; when the start is cut the summary says so. This includes Codex and Copilot CLI sessions.
+- **To whom:** Anthropic, through your own `claude` CLI and its login (your subscription), run as `claude -p --model haiku` with no tools, no session saved and your hooks and plugins switched off for that call. agent-trail has no API key and sends nothing itself.
+- **When:** only when you press `y`. A session's summary is kept in memory and shown again until new events arrive in it; it is not written to disk.
 
 ### Deleting a session
 
@@ -182,7 +191,7 @@ In the info box, a subscription cost is labelled `~$… API-equivalent`: what th
 **Prices are not built in.** They come from [LiteLLM's public price list](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) (Anthropic and OpenAI entries only):
 
 - Downloaded on first run and cached in your user cache folder (`~/Library/Caches/agent-trail` on macOS, `~/.cache/agent-trail` on Linux).
-- Refreshed in the background once the cache is a day old. The download is a plain GET of that public file; nothing about your sessions is sent.
+- Refreshed in the background once the cache is a day old. The download is a plain GET of that public file; nothing about your sessions is sent (the one exception is the summary you ask for with `y`, see Summary).
 - When a model is missing from the list, or the list lacks the rate for a kind of token the call used (for example cache writes), that call's cost is not shown. It is never guessed.
 - Claude Code context use is the last call's prompt size divided by the model's `max_input_tokens` in the list. It is not shown when the list has no limit for the model.
 - `--offline` uses the cached copy only. `--prices` prints the price used for each model in your history.

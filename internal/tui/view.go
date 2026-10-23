@@ -437,6 +437,9 @@ func stateGlyph(session trail.Session) string {
 }
 
 func (m model) detailTitle() string {
+	if m.summaryVisible() {
+		return m.summaryTitle()
+	}
 	title := "Detail (r: raw JSON)"
 	if m.raw {
 		title = "Detail · raw JSON (r: text)"
@@ -459,6 +462,9 @@ func (m *model) refreshDetail() {
 }
 
 func (m model) detailContent() string {
+	if m.summaryVisible() {
+		return m.summaryContent()
+	}
 	if m.detailErr != nil {
 		return failedStyle.Render(m.detailErr.Error())
 	}
@@ -533,9 +539,9 @@ func fitHints(hints []string, room int) string {
 func (m model) paneHints() []string {
 	switch m.focus {
 	case sessionsPane:
-		return []string{"↑↓ pick", "enter events", "c continue", "x delete", "o running only", "m " + shownOrHidden(!m.hideAutomated) + " automated", "/ filter", "a all"}
+		return []string{"↑↓ pick", "enter events", "c continue", "x delete", "o running only", "y summary", "m " + shownOrHidden(!m.hideAutomated) + " automated", "/ filter", "a all"}
 	case eventsPane:
-		return []string{"↑↓ move", "enter detail", "s event's session", "a all", "n " + shownOrHidden(!m.hideNoise) + " noise", "u usage", "f follow", "/ filter"}
+		return []string{"↑↓ move", "enter detail", "s event's session", "y summary", "a all", "n " + shownOrHidden(!m.hideNoise) + " noise", "u usage", "f follow", "/ filter"}
 	}
 	return []string{"↑↓ scroll", "r " + rawOrText(m.raw), "/ filter lines", "esc back"}
 }

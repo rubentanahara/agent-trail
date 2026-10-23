@@ -105,6 +105,8 @@ type model struct {
 	detailErr       error
 	raw             bool
 
+	summary summaryState
+
 	confirmDelete string
 	notice        string
 	waitingSince  map[string]time.Time
@@ -221,6 +223,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.finishResume(msg)
 	case jumpedMsg:
 		m.finishJump(msg)
+	case summaryMsg:
+		m.finishSummary(msg)
 	case detailMsg:
 		if m.detailStillWanted(msg) {
 			m.detailData, m.detailErr, m.detailShown = msg.detail, msg.err, msg.index
@@ -467,6 +471,8 @@ func (m *model) key(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return m.resume(), false
 	case "w":
 		return m.goToWaiting(), false
+	case "y":
+		return m.toggleSummary(), false
 	case "tab":
 		m.focus = (m.focus + 1) % paneCount
 	case "shift+tab":

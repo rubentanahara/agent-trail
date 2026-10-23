@@ -42,7 +42,7 @@ func (l checkoutLayout) addWorktree(name, branch string) string {
 	return root
 }
 
-func claudeLine(text, cwd, branch string) string {
+func claudeLineOnBranch(text, cwd, branch string) string {
 	return `{"type":"user","sessionId":"s","cwd":"` + cwd + `","gitBranch":"` + branch + `","timestamp":"` + stampNow + `","message":{"content":"` + text + `"}}`
 }
 
@@ -73,7 +73,7 @@ func TestSessionInOutsideWorktreeIsFollowedAndSiblingIsNot(t *testing.T) {
 func TestBranchComesFromTheCheckoutHeadNotTheRecordedLines(t *testing.T) {
 	layout := newCheckoutLayout(t)
 	f := newFixture(t)
-	f.writeClaude("s", layout.main, claudeLine("a", layout.main, "worktree-agent-1"), claudeLine("b", layout.main, "worktree-agent-2"))
+	f.writeClaude("s", layout.main, claudeLineOnBranch("a", layout.main, "worktree-agent-1"), claudeLineOnBranch("b", layout.main, "worktree-agent-2"))
 	batch := New(f.home, layout.main, pricing.Table{}).Start(time.Time{})
 	if got := sessionNamed(t, batch, "s").Branch; got != "main" {
 		t.Fatalf("branch = %q, want main", got)
@@ -83,7 +83,7 @@ func TestBranchComesFromTheCheckoutHeadNotTheRecordedLines(t *testing.T) {
 func TestBranchFallsBackToTheRecordedOneWhenTheFolderIsGone(t *testing.T) {
 	gone := filepath.Join(t.TempDir(), "gone")
 	f := newFixture(t)
-	f.writeClaude("s", gone, claudeLine("a", gone, "recorded"))
+	f.writeClaude("s", gone, claudeLineOnBranch("a", gone, "recorded"))
 	batch := New(f.home, EveryRepository, pricing.Table{}).Start(time.Time{})
 	if got := sessionNamed(t, batch, "s").Branch; got != "recorded" {
 		t.Fatalf("branch = %q, want recorded", got)
