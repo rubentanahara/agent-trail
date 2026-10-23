@@ -5,25 +5,46 @@ A terminal UI that shows, live, everything Claude Code, OpenAI Codex CLI and Git
 It reads the transcripts each CLI already writes to disk. Nothing has to be configured in the agents.
 
 ```
-╭ Sessions (12) ──────────────────────────╮╭ Events: Fix login redirect (686) · ● running · busy · auto-scroll ─╮
-│▶ All sessions                    2992 ev ││10-22 21:15:39 claude      user       fix the login redirect          │
-│  ● Fix login redirect         2s   $14.09││10-22 21:15:46 claude      tool       Bash command: make check        │
-│  ◌ Report checks             12m   <$0.01││10-22 21:15:58 claude      result     FAILED exit 2 …                 │
-│  ○ Create Broken.cs           3h        —││10-22 21:16:02 claude      assistant  The build fails because …       │
-╰──────────────────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
-╭ Session af572da6 ────────────────────────╮╭ Detail (r: raw JSON) ──────────────────────────────────────────────╮
-│State    running · busy · pid 38322       ││2026-10-22 21:15:58 · claude · result                                │
-│Model    claude-opus-5-5                  ││FAILED exit 2                                                        │
-│Billing  subscription                     ││error CS1513: } expected                                             │
-│Cost     ~$14.09 API-equivalent           ││                                                                     │
-╰──────────────────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────╮╭────────────────────────────────────────────────────────────────────────────────╮
+│Sessions (3)                        ││Events: Fix login redirect (10) · ● running · waiting for you · auto-scroll     │
+│  All sessions                 11 ev││10-23 07:14:45 claude               user       $0.45 fix the login redirect     │
+│▶ ▾ ◐ Fix login redir…   9m    $2.35││10-23 07:14:47 claude               usage      claude-opus-5-5 in 41.2k (cache …│
+│  └ ✓ Find redirect h…   9m    $0.03││10-23 07:14:49 claude               tool       Bash command: make check         │
+│    ◌ Write migration…   9m        —││10-23 07:14:54 claude               result     FAILED exit 2 error CS1513: } ex…│
+│                                    ││10-23 07:14:57 Find redirect handl… tool       Grep pattern: redirect path: src/│
+│                                    ││10-23 07:14:59 Find redirect handl… usage      claude-opus-5-5 in 41.2k (cache …│
+│                                    ││10-23 07:15:05 claude               assistant  The build fails because the call…│
+│                                    ││10-23 07:15:25 claude               user       $1.87 now add a test for the exp…│
+│                                    ││10-23 07:15:29 claude               usage      claude-opus-5-5 in 41.2k (cache …│
+│                                    ││10-23 07:15:35 claude               edit       Edit file_path: src/auth/login_t…│
+│                                    ││                                                                                │
+│                                    ││                                                                                │
+╰────────────────────────────────────╯╰────────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────╮╭────────────────────────────────────────────────────────────────────────────────╮
+│Session af572da6                    ││Detail (r: raw JSON)                                                            │
+│Name      Fix login redirect        ││no event selected                                                               │
+│State     running · waiting for you…││                                                                                │
+│Cost      ~$2.32 API-equivalent     ││                                                                                │
+│Turns     2 prompts · costliest $1.…││                                                                                │
+│Limits    context 18%               ││                                                                                │
+│CLI       claude                    ││                                                                                │
+│Agents    1 (0 running) · with agen…││                                                                                │
+│Model     claude-opus-5-5           ││                                                                                │
+│Branch    fix/login                 ││                                                                                │
+│Folder    /work/app                 ││                                                                                │
+│Billing   subscription              ││                                                                                │
+╰────────────────────────────────────╯╰────────────────────────────────────────────────────────────────────────────────╯
+? keys  ↑↓ pick  enter events  c continue  y summary  d files  space fold  x delete  o running only    agent-trail 0.5.0
 ```
 
 Claude Code is orange, Codex green and Copilot purple. Your own prompts are bold cyan.
 
-### Icons
-
-Sessions, events and the info box carry small icons for each CLI, agents, git branches and folders. They need a Nerd Font 3.5 or newer. With an older font, or a plain one, run `agent-trail --icons=false`.
+- **Live.** Every prompt, reply, tool call and result, with what each prompt cost, which session is waiting for you and how full its context is.
+- **Subagents.** Each Claude Code subagent is its own row, named by what it was asked to do, foldable with `space`.
+- **Files changed.** `d` lists the files a session edited, with a coloured diff for each.
+- **Summary.** `y` asks Claude Haiku for a Markdown summary of a session so far.
+- **Needs you.** A bell and desktop notification when a session starts waiting; `w` and `c` jump to its tmux pane.
+- **Limits and cost.** The Claude 5-hour and weekly usage windows, per-session cost in API-equivalent dollars, and a stats screen across every repository.
 
 ## Install
 
@@ -54,6 +75,10 @@ agent-trail --version
 ```
 
 When stdout is not a terminal it prints the history as plain text and exits.
+
+### Icons
+
+Sessions, events and the info box carry small icons for each CLI, agents, git branches and folders. They need a Nerd Font 3.5 or newer. With an older font, or a plain one, run `agent-trail --icons=false`. The screenshot above is shown without them.
 
 ### Keys
 
@@ -160,7 +185,7 @@ Output-style tools such as caveman and ponytail record no savings: there is no r
 
 **Sessions.** One row per session that had activity in the replay window, the most recently active first. Each row shows its state, the time since its last event, and its cost including its agents. The cost is in dollars only, `—` when the model has no price, and red when the session is billed to an API key. The name is the session title the CLI generated or you set, otherwise the first prompt. When following every repository, the row also names the folder the session ran in.
 
-**Files changed.** `d` lists the files a session edited, with lines added and removed and every change as a diff in time order. Claude Code: the exact patch it records for each Edit, Write and MultiEdit result, plus the diff of files a Bash command such as `sed -i` modified. Codex: file changes, counted from the content of a new file or from the unified diff Codex records; a change with no diff is listed as `+? −?`. Copilot CLI: the diff stored with each edit and create result.
+**Files changed.** `d` lists the files a session edited, with lines added and removed and every change as a diff in time order. The screen updates while it is open as new edits arrive. Claude Code: the exact patch it records for each Edit, Write and MultiEdit result, plus the diff of files a Bash command such as `sed -i` modified. Codex: file changes, counted from the content of a new file or from the unified diff Codex records; a change with no diff is listed as `+? −?`. Copilot CLI: the diff stored with each edit and create result.
 
 **Agents.** Each Claude Code subagent (a Task or Agent call, foreground or background) gets its own row under the session that started it, named by the description it was given, with its agent type. `●` means it is still running and `✓` that it finished, read from the `.meta.json` Claude Code writes beside each agent transcript. Agents are folded automatically unless their session is running or selected; `space` folds or unfolds a session's agents and overrides that for the session. `▸` marks a folded session and `▾` an unfolded one. Selecting the session shows its events and every agent's; selecting an agent shows only that agent's. Codex and Copilot CLI record their subagents inside the session transcript, so they stay in the parent row and the `Subagents` field.
 
