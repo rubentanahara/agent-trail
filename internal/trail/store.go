@@ -31,9 +31,10 @@ type source struct {
 
 var newParsers = map[CLI]func(path string) parser{Claude: newClaudeParser, Codex: newCodexParser, Copilot: newCopilotParser}
 
-func sources(home, repo string) []source {
+func (t *Trail) buildSources() []source {
+	home := t.home
 	return []source{
-		{Claude, func() []string { return claudeCandidates(home, repo) }, claudeBelongs, claudeSessionID, claudeParentID, claudeArtifacts},
+		{Claude, func() []string { return t.claudeCandidates(home) }, claudeBelongs, claudeSessionID, claudeParentID, claudeArtifacts},
 		{Codex, func() []string { return codexCandidates(home) }, codexBelongs, codexSessionID, noParent, codexArtifacts},
 		{Copilot, func() []string { return copilotCandidates(home) }, copilotBelongs, copilotSessionID, noParent, copilotArtifacts},
 	}
@@ -68,6 +69,7 @@ type Trail struct {
 	sources     []source
 	transcripts map[string]*transcript
 	rejected    map[string]bool
+	checkouts   *checkouts
 	undecided   map[string]int64
 	sessions    map[string]*Session
 	changed     map[string]bool
@@ -80,11 +82,11 @@ type Trail struct {
 const EveryRepository = ""
 
 func New(home, repo string, prices pricing.Table) *Trail {
-	return &Trail{
+	t := &Trail{
 		home:        home,
 		repo:        repo,
 		prices:      prices,
-		sources:     sources(home, repo),
+		checkouts:   newCheckouts(repo),
 		transcripts: map[string]*transcript{},
 		rejected:    map[string]bool{},
 		undecided:   map[string]int64{},
@@ -93,12 +95,15 @@ func New(home, repo string, prices pricing.Table) *Trail {
 		rewritten:   map[string]bool{},
 		indexSize:   -1,
 	}
+	t.sources = t.buildSources()
+	return t
 }
 
 func (t *Trail) Start(cutoff time.Time) Batch {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.cutoff = cutoff
+	t.refreshCheckouts()
 	return t.finish(t.readConcurrently(t.startReads(cutoff)))
 }
 
@@ -106,6 +111,7 @@ func (t *Trail) Poll() Batch {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	var events []Event
+	t.refreshCheckouts()
 	for _, path := range t.discover() {
 		events = append(events, t.read(path, t.transcripts[path])...)
 	}
@@ -191,6 +197,7 @@ func writtenWithin(path string, window time.Duration) bool {
 func (t *Trail) finish(events []Event) Batch {
 	t.refreshThreadNames()
 	t.refreshLiveness()
+	t.applyCheckoutBranches()
 	sort.SliceStable(events, func(i, j int) bool { return events[i].Time.Before(events[j].Time) })
 	batch := Batch{Events: events}
 	for key := range t.changed {
@@ -264,7 +271,7 @@ func (t *Trail) decide(path string, src *source) bool {
 	if previous, waiting := t.undecided[path]; waiting && previous == size {
 		return false
 	}
-	belongs, decided := src.belongs(path, t.repo)
+	belongs, decided := t.belongsToAny(path, src)
 	if !decided {
 		t.undecided[path] = size
 		return false

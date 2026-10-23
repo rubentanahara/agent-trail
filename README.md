@@ -163,7 +163,7 @@ Output-style tools such as caveman and ponytail record no savings: there is no r
 
 When a top-level session starts waiting for you while agent-trail runs (Claude Code goes `idle`, or a Codex or Copilot turn ends), the footer says so, the terminal bell rings and a desktop notification is sent (OSC 9; inside tmux it goes through `allow-passthrough`). Several at once give one alert. Sessions started by a program are skipped while hidden. `--notify=false` keeps the footer notice and turns off the bell and the desktop notification.
 
-**Per session:** state, agent, subagents, model, git branch, permission mode, billing, active time, tokens in (with cache reads and writes), tokens out (with reasoning), cost, rate-limit and context use, lines added and removed, number of model calls.
+**Per session:** state, agent, subagents, model, git branch (the folder's current branch), permission mode, billing, active time, tokens in (with cache reads and writes), tokens out (with reasoning), cost, rate-limit and context use, lines added and removed, number of model calls.
 
 **Prompt cost.** Each prompt row starts with what its turn cost: the priced model calls from that prompt to the next one in the same session, agents included. `$1.23+` means some calls in the turn had no price. Prompts with no priced call show nothing. The session's `Turns` field gives the prompt count and the costliest prompt.
 
@@ -211,7 +211,7 @@ The example is a real case: on 2026-10-22 the list had $0.10 per million cache-r
 | Codex | `~/.codex/sessions/**/rollout-*.jsonl` | `~/.codex/session_index.jsonl` |
 | Copilot CLI | `~/.copilot/session-state/*/events.jsonl` | `workspace.yaml` |
 
-A session belongs to the repository when the working directory it recorded is the repository or a folder inside it. Sibling folders with the same prefix are excluded.
+A session belongs to the repository when the working directory it recorded is the repository or a folder inside it. A session also belongs when its folder is inside any git worktree of the repository, wherever that worktree lives; the worktree list is read from the repository's git files and refreshed when a worktree is added or removed. Sibling folders with the same prefix are excluded. A session's branch is the branch currently checked out in its folder (read from git, falling back to the one the transcript recorded). When the listed sessions sit on more than one branch, each session row shows a faint ` · <branch>` hint.
 
 These formats are not documented by their vendors and can change in any CLI release. A record of a known type whose fields no longer decode is shown as `unparsed` rather than dropped, so format changes are visible.
 

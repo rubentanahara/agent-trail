@@ -323,7 +323,7 @@ func (m model) sessionLabelRow(row int, key string) string {
 	session := m.sessions[key]
 	name := m.sessionQuery.highlight(sessionLabel(session), matchStyle)
 	if !m.isChild(session) {
-		return marker(key == m.activeSession) + glyphStyle(session).Render(stateGlyph(session)) + cliStyle(session.CLI).Render(m.cliIcon(session.CLI)) + name + m.projectHint(session)
+		return marker(key == m.activeSession) + glyphStyle(session).Render(stateGlyph(session)) + cliStyle(session.CLI).Render(m.cliIcon(session.CLI)) + name + m.projectHint(session) + m.branchHint(session)
 	}
 	return marker(key == m.activeSession) + faintStyle.Render(m.branchGlyph(row)) + glyphStyle(session).Render(stateGlyph(session)) + cliStyle(session.CLI).Render(m.icon(agentIcon)) + name + faintStyle.Render(" · "+session.Agent)
 }
@@ -341,6 +341,28 @@ func (m model) projectHint(session trail.Session) string {
 		return ""
 	}
 	return faintStyle.Render(" · " + filepath.Base(session.Cwd))
+}
+
+func (m model) branchHint(session trail.Session) string {
+	if session.Branch == "" || !m.topLevelSpansBranches() {
+		return ""
+	}
+	return faintStyle.Render(" · " + session.Branch)
+}
+
+func (m model) topLevelSpansBranches() bool {
+	first := ""
+	for _, key := range m.order {
+		session := m.sessions[key]
+		switch {
+		case m.isChild(session) || session.Branch == "":
+		case first == "":
+			first = session.Branch
+		case session.Branch != first:
+			return true
+		}
+	}
+	return false
 }
 
 func (m model) familySession(key string) trail.Session {
