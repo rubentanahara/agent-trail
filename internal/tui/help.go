@@ -87,6 +87,7 @@ var helpSections = []helpSection{
 		{"v", "resolve or unresolve the selected thread"},
 		{"M", "merge: s m r pick a method, d toggles branch deletion, a auto-merge, y confirms"},
 		{"X", "close the pull request, after y"},
+		{"C", "check out the pull request branch in this repository, after y"},
 		{"A", "review: a approve, r request changes, c comment, then your editor, then y"},
 		{"L", "Checks tab: read the log of a GitHub Actions check; a failed or full, / search, n N next"},
 		{"E", "Checks tab: re-run a GitHub Actions check, after y; a switches to all jobs"},

@@ -203,6 +203,7 @@ The list has *Needs my review*, *My PRs* and *All open* (up to 100). The detail 
 | `v` | Resolve or unresolve the selected thread |
 | `M` | Merge: `s` `m` `r` pick an allowed method, `d` toggles deleting the remote branch, `a` auto-merge when checks are pending, `y` confirms |
 | `X` | Close the pull request, after `y` |
+| `C` | Check out the pull request branch in this repository (`gh pr checkout`), after `y` |
 | `A` | Review: `a` approve, `r` request changes, `c` comment, then your editor, then `y` |
 | `L` | Checks tab: read the log of a GitHub Actions check (`a` failed steps or full log, last 5000 lines; `/` search, `n` `N` next match) |
 | `E` | Checks tab: re-run a GitHub Actions check, after `y` (`a` for all jobs) |

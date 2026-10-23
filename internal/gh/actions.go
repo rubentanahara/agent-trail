@@ -46,6 +46,10 @@ func CloseArgs(number int) []string {
 	return []string{"pr", "close", strconv.Itoa(number)}
 }
 
+func CheckoutArgs(number int) []string {
+	return []string{"pr", "checkout", strconv.Itoa(number)}
+}
+
 func MergeArgs(repo string, number int, method MergeMethod, deleteBranch, auto bool) []string {
 	args := []string{"pr", "merge", strconv.Itoa(number), "--repo=" + repo, string(method)}
 	if deleteBranch {

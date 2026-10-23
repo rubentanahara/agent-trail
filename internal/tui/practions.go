@@ -22,6 +22,7 @@ const (
 	confirmRerun
 	confirmDiscard
 	confirmSubmitPick
+	confirmCheckout
 )
 
 type prConfirm struct {
@@ -210,6 +211,8 @@ func (m *model) prActionKey(key string) (tea.Cmd, bool) {
 		m.askClose()
 	case "M":
 		return m.askMerge(), true
+	case "C":
+		m.askCheckout()
 	case "A":
 		m.askReview()
 	case "E":
@@ -309,6 +312,14 @@ func (m *model) askClose() {
 	m.pr.confirm = &prConfirm{kind: confirmClose, number: pr.Number, title: pr.Title, stamp: stampOf(m.pr.byNumber[pr.Number])}
 }
 
+func (m *model) askCheckout() {
+	pr, ok := m.pr.selected()
+	if !ok {
+		return
+	}
+	m.pr.confirm = &prConfirm{kind: confirmCheckout, number: pr.Number, title: pr.Title, stamp: stampOf(m.pr.byNumber[pr.Number])}
+}
+
 func (m *model) askReview() {
 	pr, ok := m.pr.selected()
 	if !ok {
@@ -406,6 +417,8 @@ func (m *model) runConfirmed(c *prConfirm) tea.Cmd {
 	switch c.kind {
 	case confirmClose:
 		return m.startWrite(prWrite{key: fmt.Sprintf("close:%d", c.number), label: fmt.Sprintf("close #%d", c.number), number: c.number, args: gh.CloseArgs(c.number)})
+	case confirmCheckout:
+		return m.startWrite(prWrite{key: fmt.Sprintf("checkout:%d", c.number), label: fmt.Sprintf("check out #%d", c.number), number: c.number, args: gh.CheckoutArgs(c.number)})
 	case confirmReviewSend:
 		return m.startWrite(prWrite{key: fmt.Sprintf("review:%d", c.number), label: fmt.Sprintf("%s review on #%d", reviewEventWords[c.event], c.number), number: c.number, args: gh.ReviewArgs(c.number, c.event, c.draft), draft: c.draft})
 	}
@@ -472,6 +485,8 @@ func (m model) confirmBody(c *prConfirm) string {
 	switch c.kind {
 	case confirmClose:
 		return fmt.Sprintf("Close #%d %q? y closes · any other key cancels", c.number, sanitize(c.title))
+	case confirmCheckout:
+		return fmt.Sprintf("Check out #%d %q in this repository? y checks out · any other key cancels", c.number, sanitize(c.title))
 	case confirmMerge:
 		return m.mergePrompt(c)
 	case confirmReviewPick:

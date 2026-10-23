@@ -215,6 +215,21 @@ func TestCloseNeedsYAndAnyOtherKeyCancels(t *testing.T) {
 	}
 }
 
+func TestCheckoutNeedsYAndAnyOtherKeyCancels(t *testing.T) {
+	fake := newFakeGH(t)
+	fake.set(gh.CheckoutArgs(prForkPR), nil)
+	m := openedPRs(t, fake)
+
+	cancelled := pressPR(m, "C", "n")
+	if fake.count("pr checkout") != 0 || !strings.Contains(cancelled.notice, "cancel") {
+		t.Fatalf("checkout called after a cancel: %v", fake.calls)
+	}
+	pressPR(m, "C", "y")
+	if fake.count("pr checkout") != 1 {
+		t.Fatalf("checkout calls = %d", fake.count("pr checkout"))
+	}
+}
+
 func TestConfirmationCapturesEveryKeyAndNamesThePullRequest(t *testing.T) {
 	m := pressPR(openedPRs(t, newFakeGH(t)), "X")
 
