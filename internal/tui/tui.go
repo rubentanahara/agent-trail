@@ -61,6 +61,7 @@ type Context struct {
 	Everywhere   *trail.Trail
 	StatsSince   time.Time
 	Icons        bool
+	Notify       bool
 }
 
 type model struct {
@@ -105,6 +106,7 @@ type model struct {
 
 	confirmDelete string
 	notice        string
+	waitingSince  map[string]time.Time
 
 	statsScreen statsScreen
 
@@ -150,6 +152,7 @@ func newModel(follower *trail.Trail, history trail.Batch, context Context) model
 		detailRequested: noEvent,
 		detailShown:     noEvent,
 	}
+	m.seedWaiting(history.Sessions)
 	m.absorb(history)
 	return m
 }
@@ -201,8 +204,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case pollMsg:
 		return m, tea.Batch(m.poll(), m.statsScreen.poll(m.context.Everywhere))
 	case batchMsg:
-		m.absorb(msg.batch)
-		cmds = append(cmds, tick())
+		cmds = append(cmds, m.absorbPolled(msg.batch), tick())
 	case statsMsg:
 		m.statsScreen.absorb(msg.batch)
 	case savingsMsg:
@@ -457,6 +459,8 @@ func (m *model) key(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		m.refilter()
 	case "c":
 		return m.resume(), false
+	case "w":
+		return m.goToWaiting(), false
 	case "tab":
 		m.focus = (m.focus + 1) % paneCount
 	case "shift+tab":

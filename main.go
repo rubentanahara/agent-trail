@@ -44,6 +44,7 @@ type options struct {
 	version bool
 	global  bool
 	icons   bool
+	notify  bool
 }
 
 func main() {
@@ -65,7 +66,7 @@ func parseOptions(args []string, output io.Writer) (options, error) {
 	flags := flag.NewFlagSet("agent-trail", flag.ContinueOnError)
 	flags.SetOutput(output)
 	flags.Usage = func() {
-		fmt.Fprintln(output, "Usage: agent-trail [--once] [--days N | --all] [--repo PATH | --global] [--offline] [--icons=false] [--prices] [--version]")
+		fmt.Fprintln(output, "Usage: agent-trail [--once] [--days N | --all] [--repo PATH | --global] [--offline] [--icons=false] [--notify=false] [--prices] [--version]")
 		fmt.Fprintln(output, "Live, filterable log of what Claude Code, Codex and Copilot CLI do in a git repository, or in every repository.")
 		flags.PrintDefaults()
 	}
@@ -77,6 +78,7 @@ func parseOptions(args []string, output io.Writer) (options, error) {
 	flags.BoolVar(&opts.offline, "offline", false, "do not download the price list; use the cached copy if there is one")
 	flags.BoolVar(&opts.prices, "prices", false, "print the price of every model used in the replayed history and exit")
 	flags.BoolVar(&opts.icons, "icons", true, "show Nerd Font icons (needs Nerd Fonts 3.5 or newer); --icons=false for plain text")
+	flags.BoolVar(&opts.notify, "notify", true, "ring the bell and send a desktop notification when a session needs you; --notify=false keeps only the footer notice")
 	flags.BoolVar(&opts.version, "version", false, "print the version and exit")
 	if err := flags.Parse(args); err != nil {
 		return opts, err
@@ -134,7 +136,7 @@ func run(opts options) error {
 	}
 	return tui.Run(follower, history, tui.Context{
 		Repo: repo, Home: home, Version: buildVersion(), PricesAsOf: prices.FetchedAt, PriceWarning: status.Warning,
-		Everywhere: trail.New(home, "", prices), StatsSince: statsSince(cutoff), Icons: opts.icons,
+		Everywhere: trail.New(home, "", prices), StatsSince: statsSince(cutoff), Icons: opts.icons, Notify: opts.notify,
 	})
 }
 

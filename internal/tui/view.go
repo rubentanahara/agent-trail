@@ -519,7 +519,7 @@ func (m model) paneHints() []string {
 }
 
 func (m model) globalHints() []string {
-	return []string{"tab panes", "z " + zoomAction(m.zoomed), "t stats", "q quit"}
+	return []string{"tab panes", "z " + zoomAction(m.zoomed), "w waiting", "t stats", "q quit"}
 }
 
 func rawOrText(raw bool) string {

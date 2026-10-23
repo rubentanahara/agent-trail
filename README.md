@@ -49,6 +49,7 @@ agent-trail --once | grep FAILED   # plain text, no TUI
 agent-trail --prices     # the price used for every model in the history
 agent-trail --offline    # do not download the price list
 agent-trail --icons=false   # no Nerd Font icons
+agent-trail --notify=false  # no bell or desktop notification when a session needs you
 agent-trail --version
 ```
 
@@ -72,6 +73,7 @@ When stdout is not a terminal it prints the history as plain text and exits.
 | `z` | Zoom the focused pane to the whole screen, or restore the layout. While zoomed, `1` `2` `3` and `tab` switch which pane fills the screen |
 | `o` | Sessions pane: show only running sessions, or all again. Codex sessions never show as running (see State) |
 | `c` | Continue the selected session in its own CLI, in the folder it ran in: `claude --resume <id>`, `codex resume <id>` or `copilot --resume <id>`. agent-trail returns when you quit the CLI. On a running session inside tmux it jumps to the pane where it runs; outside tmux it says where it runs. On an agent row it opens the parent session |
+| `w` | Jump to the session that has waited for you the longest: selects it and, when it runs in tmux, switches to its pane. Press again for the next one, oldest first |
 | `m` | Show or hide sessions started by a program (see Stats screen). Hidden at start when following every repository |
 | `x` | Sessions pane: delete the selected session and its transcript files, after you confirm with `y`. A session is refused while it is running, while a Codex or Copilot turn is open, or if its transcript changed in the last 2 minutes. Agents are deleted with their parent |
 | `t` | Open or close the stats screen (see below) |
@@ -158,6 +160,8 @@ Output-style tools such as caveman and ponytail record no savings: there is no r
 | `◐` | Running and waiting for you: Claude Code is `idle` at its prompt | Same marker as `●`, with `status` `idle`. Shown as `waiting for you`; `/waiting` finds it. Codex and Copilot have no such marker |
 | `○` | Closed, including sessions ended with `ctrl+c` | The marker above is gone or its process is dead |
 | `◌` | Not recorded | Codex keeps no per-session marker on disk. `working` is shown while one of its turns is open |
+
+When a top-level session starts waiting for you while agent-trail runs (Claude Code goes `idle`, or a Codex or Copilot turn ends), the footer says so, the terminal bell rings and a desktop notification is sent (OSC 9; inside tmux it goes through `allow-passthrough`). Several at once give one alert. Sessions started by a program are skipped while hidden. `--notify=false` keeps the footer notice and turns off the bell and the desktop notification.
 
 **Per session:** state, agent, subagents, model, git branch, permission mode, billing, active time, tokens in (with cache reads and writes), tokens out (with reasoning), cost, rate-limit and context use, lines added and removed, number of model calls.
 
