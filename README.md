@@ -71,7 +71,7 @@ When stdout is not a terminal it prints the history as plain text and exits.
 | `f` | Turn auto-scroll to the newest event on or off |
 | `z` | Zoom the focused pane to the whole screen, or restore the layout. While zoomed, `1` `2` `3` and `tab` switch which pane fills the screen |
 | `o` | Sessions pane: show only running sessions, or all again. Codex sessions never show as running (see State) |
-| `c` | Continue the selected session in its own CLI, in the folder it ran in: `claude --resume <id>`, `codex resume <id>` or `copilot --resume <id>`. agent-trail returns when you quit the CLI. Refused while the session is open in another terminal. On an agent row it opens the parent session |
+| `c` | Continue the selected session in its own CLI, in the folder it ran in: `claude --resume <id>`, `codex resume <id>` or `copilot --resume <id>`. agent-trail returns when you quit the CLI. On a running session inside tmux it jumps to the pane where it runs; outside tmux it says where it runs. On an agent row it opens the parent session |
 | `m` | Show or hide sessions started by a program (see Stats screen). Hidden at start when following every repository |
 | `x` | Sessions pane: delete the selected session and its transcript files, after you confirm with `y`. A session is refused while it is running, while a Codex or Copilot turn is open, or if its transcript changed in the last 2 minutes. Agents are deleted with their parent |
 | `t` | Open or close the stats screen (see below) |

@@ -21,8 +21,10 @@ func (m *model) resume() tea.Cmd {
 	case !ok:
 		m.notice = "select a session to open"
 		return nil
+	case session.Liveness == trail.LivenessRunning && session.PID > 0:
+		return m.jumpToRunning(session)
 	case session.Liveness == trail.LivenessRunning:
-		m.notice = sessionLabel(session) + " is already open" + optional(" in pid ", pidText(session.PID))
+		m.notice = sessionLabel(session) + " is already open"
 		return nil
 	case session.TurnOpen:
 		m.notice = sessionLabel(session) + " is still working; wait for its turn to end"

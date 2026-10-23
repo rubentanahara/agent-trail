@@ -418,10 +418,11 @@ func TestContinueOpensTheParentSessionAndRefusesARunningOne(t *testing.T) {
 	if cmd := m.resume(); cmd == nil {
 		t.Fatalf("closed session not opened: %q", m.notice)
 	}
+	t.Setenv("TMUX", "")
 	batch := agentBatch()
 	batch.Sessions[0].Liveness, batch.Sessions[0].PID = trail.LivenessRunning, 42
 	m = press(sized(newModel(nil, batch, Context{Repo: "/repo"}), 160, 40), "1", "down")
-	if cmd := m.resume(); cmd != nil || !strings.Contains(m.notice, "already open in pid 42") {
+	if cmd := m.resume(); cmd != nil || !strings.Contains(m.notice, "open in another terminal (pid 42)") {
 		t.Fatalf("running session: notice = %q", m.notice)
 	}
 }

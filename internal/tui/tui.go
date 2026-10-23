@@ -211,6 +211,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.finishDelete(msg)
 	case resumedMsg:
 		m.finishResume(msg)
+	case jumpedMsg:
+		m.finishJump(msg)
 	case detailMsg:
 		if m.detailStillWanted(msg) {
 			m.detailData, m.detailErr, m.detailShown = msg.detail, msg.err, msg.index
