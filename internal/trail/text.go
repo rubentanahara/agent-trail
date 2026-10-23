@@ -38,6 +38,20 @@ func summaryText(text, cwd string) string {
 	return text
 }
 
+const homeShorthand = "~"
+
+func (t *Trail) commandSummary(text, cwd string) string {
+	return summaryText(summaryText(text, cwd), homeRelative(cwd, t.home))
+}
+
+func homeRelative(path, home string) string {
+	rest, underHome := strings.CutPrefix(path, home+"/")
+	if home == "" || !underHome {
+		return ""
+	}
+	return homeShorthand + "/" + rest
+}
+
 func Clip(text string) string {
 	runes := []rune(leadingBytes(text, clipScanBytes))
 	if len(runes) > SummaryLimit*2 {
