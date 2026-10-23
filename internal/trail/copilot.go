@@ -130,7 +130,8 @@ func copilotUpdateSession(eventType string, data copilotData, session *Session) 
 	case "session.start":
 		session.Model = data.SelectedModel
 		if data.Context != nil {
-			session.Cwd, session.Branch = data.Context.Cwd, data.Context.Branch
+			session.Cwd = data.Context.Cwd
+			session.setBranch(data.Context.Branch)
 		}
 	case "session.model_change":
 		session.Model = data.NewModel

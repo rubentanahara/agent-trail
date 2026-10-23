@@ -95,18 +95,34 @@ func (t *Trail) claudeCandidates(home string) []string {
 
 func (t *Trail) applyCheckoutBranches() {
 	known := map[string]string{}
-	for key := range t.changed {
-		session := t.sessions[key]
+	sample := func(cwd string) string {
+		branch, seen := known[cwd]
+		if !seen {
+			branch = checkoutBranch(cwd)
+			known[cwd] = branch
+		}
+		return branch
+	}
+	for key, session := range t.sessions {
 		if session.Cwd == "" {
 			continue
 		}
-		branch, seen := known[session.Cwd]
-		if !seen {
-			branch = checkoutBranch(session.Cwd)
-			known[session.Cwd] = branch
+		if !t.changed[key] && session.Liveness == LivenessClosed {
+			continue
 		}
-		if branch != "" {
-			session.Branch = branch
+		branch := sample(session.Cwd)
+		if branch == "" {
+			continue
+		}
+		if session.Liveness != LivenessClosed && branch != session.Branch {
+			t.changed[key] = true
+		}
+		if !t.changed[key] {
+			continue
+		}
+		session.Branch = branch
+		if session.Liveness != LivenessClosed {
+			session.noteBranch(branch)
 		}
 	}
 }

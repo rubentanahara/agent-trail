@@ -157,7 +157,7 @@ func (p *codexParser) updateSession(recordType string, payload codexPayload, ses
 	case "session_meta":
 		session.Cwd = payload.Cwd
 		if payload.Git != nil {
-			session.Branch = payload.Git.Branch
+			session.setBranch(payload.Git.Branch)
 		}
 		if payload.ThreadSource != "" && payload.ThreadSource != codexUserThread {
 			session.Agent = payload.ThreadSource

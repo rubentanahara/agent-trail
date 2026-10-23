@@ -105,6 +105,7 @@ type Session struct {
 	Subagents    []string
 	Model        string
 	Branch       string
+	Branches     []string
 	Cwd          string
 	Automated    bool
 	Permission   string
@@ -166,6 +167,20 @@ func (s *Session) setFallbackName(prompt string) {
 	s.Name = string(name)
 }
 
+func (s *Session) setBranch(branch string) {
+	if branch == "" {
+		return
+	}
+	s.Branch = branch
+	s.noteBranch(branch)
+}
+
+func (s *Session) noteBranch(branch string) {
+	if branch != "" && !slices.Contains(s.Branches, branch) {
+		s.Branches = append(s.Branches, branch)
+	}
+}
+
 func (s *Session) addSubagent(name string) {
 	if name != "" && !slices.Contains(s.Subagents, name) {
 		s.Subagents = append(s.Subagents, name)
@@ -210,5 +225,6 @@ func (s *Session) touch(t time.Time) {
 
 func (s Session) clone() Session {
 	s.Subagents = slices.Clone(s.Subagents)
+	s.Branches = slices.Clone(s.Branches)
 	return s
 }

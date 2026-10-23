@@ -235,9 +235,7 @@ func (p *claudeParser) updateSession(entry claudeEntry, session *Session) {
 	if entry.Cwd != "" {
 		session.Cwd = entry.Cwd
 	}
-	if entry.GitBranch != "" {
-		session.Branch = entry.GitBranch
-	}
+	session.setBranch(entry.GitBranch)
 	if strings.HasPrefix(entry.Entrypoint, claudeSDKEntrypoint) {
 		session.Automated = true
 	}
