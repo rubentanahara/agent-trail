@@ -106,3 +106,19 @@ func TestTheCurrentHourStartsOnTheLocalHour(t *testing.T) {
 		t.Fatalf("hour = %+v", hour)
 	}
 }
+
+func TestResetForgetsTheRewrittenSessionsOldTotals(t *testing.T) {
+	s := New(now.AddDate(0, 0, -30))
+	s.Add(sample(t.TempDir()))
+	s.Add(trail.Batch{
+		Reset:  []string{"claude:a"},
+		Events: []trail.Event{{Session: "claude:a", Kind: trail.KindUser, Time: now.Add(-time.Minute)}},
+	})
+	clis := s.ByCLI()
+	if len(clis) != 2 || clis[0].Label != "codex" || clis[1].Label != "claude" || clis[1].Prompts != 1 || clis[1].CostUSD != 0 {
+		t.Fatalf("by CLI = %+v", clis)
+	}
+	if spend := s.Spend(now); spend[2].Current != 0 {
+		t.Fatalf("day spend = %v", spend[2].Current)
+	}
+}

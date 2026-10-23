@@ -100,6 +100,11 @@ func (s *Stats) AutomatedSessions() int {
 }
 
 func (s *Stats) Add(batch trail.Batch) {
+	for _, key := range batch.Reset {
+		delete(s.perSession, key)
+		delete(s.extensions, key)
+		delete(s.spend, key)
+	}
 	for _, session := range batch.Sessions {
 		s.sessions[session.Key] = session
 	}

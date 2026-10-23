@@ -236,6 +236,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) absorb(batch trail.Batch) {
+	if len(batch.Reset) > 0 {
+		m.dropEvents(func(session string) bool { return slices.Contains(batch.Reset, session) })
+	}
 	for _, session := range batch.Sessions {
 		m.sessions[session.Key] = session
 	}
@@ -711,18 +714,22 @@ func (m *model) forgetSession(key string) {
 	for _, member := range family {
 		delete(m.sessions, member)
 	}
+	if slices.Contains(family, m.activeSession) {
+		m.activeSession = ""
+	}
+	m.dropEvents(func(session string) bool { return slices.Contains(family, session) })
+	m.reorderSessions()
+}
+
+func (m *model) dropEvents(drop func(session string) bool) {
 	kept := 0
 	for i, event := range m.events {
-		if !slices.Contains(family, event.Session) {
+		if !drop(event.Session) {
 			m.events[kept], m.haystack[kept] = event, m.haystack[i]
 			kept++
 		}
 	}
 	m.events, m.haystack = m.events[:kept], m.haystack[:kept]
-	if slices.Contains(family, m.activeSession) {
-		m.activeSession = ""
-	}
-	m.reorderSessions()
 	m.detailRequested, m.detailShown, m.detailData = noEvent, noEvent, trail.Detail{}
 	m.visible = m.visible[:0]
 	m.refilter()

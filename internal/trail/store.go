@@ -57,6 +57,7 @@ type transcript struct {
 type Batch struct {
 	Events   []Event
 	Sessions []Session
+	Reset    []string
 }
 
 type Trail struct {
@@ -70,6 +71,7 @@ type Trail struct {
 	undecided   map[string]int64
 	sessions    map[string]*Session
 	changed     map[string]bool
+	rewritten   map[string]bool
 	threadNames map[string]string
 	indexSize   int64
 	prices      pricing.Table
@@ -88,6 +90,7 @@ func New(home, repo string, prices pricing.Table) *Trail {
 		undecided:   map[string]int64{},
 		sessions:    map[string]*Session{},
 		changed:     map[string]bool{},
+		rewritten:   map[string]bool{},
 		indexSize:   -1,
 	}
 }
@@ -125,6 +128,7 @@ func (t *Trail) Poll() Batch {
 		case file.parked:
 		case size >= 0 && size < file.offset:
 			file.offset, file.hideBefore, file.parser = 0, 0, newParsers[file.source.cli](path)
+			t.resetSession(file, path)
 			events = append(events, t.read(path, file)...)
 		case size > file.offset:
 			events = append(events, t.read(path, file)...)
@@ -204,7 +208,17 @@ func (t *Trail) finish(events []Event) Batch {
 		batch.Sessions = append(batch.Sessions, t.sessions[key].clone())
 	}
 	t.changed = map[string]bool{}
+	for key := range t.rewritten {
+		batch.Reset = append(batch.Reset, key)
+	}
+	t.rewritten = map[string]bool{}
 	return batch
+}
+
+func (t *Trail) resetSession(file *transcript, path string) {
+	key := file.sessionKey
+	t.sessions[key] = &Session{Key: key, CLI: file.source.cli, ID: file.source.sessionID(path), Parent: file.parentKey}
+	t.rewritten[key] = true
 }
 
 func (t *Trail) discover() []string {
