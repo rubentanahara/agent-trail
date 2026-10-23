@@ -229,7 +229,7 @@ func TestRateLimitedPausesPollingAndShowsRetry(t *testing.T) {
 	if !m.pr.rateLimited(m.now) {
 		t.Fatal("not rate limited")
 	}
-	if !strings.Contains(screenText(m), "retry in 4m") {
+	if !strings.Contains(screenText(m), "retry at "+clockAt(t, 4*time.Minute).Local().Format(clockLayout)) {
 		t.Fatalf("header lacks retry:\n%s", screenText(m))
 	}
 	m.now = clockAt(t, time.Minute)

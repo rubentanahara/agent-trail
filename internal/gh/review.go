@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const threadsQuery = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){totalCount nodes{id isResolved isOutdated path line comments(first:50){nodes{id body state createdAt url viewerCanUpdate author{login}}}}} reviews(first:10,states:PENDING){nodes{id commit{oid} comments{totalCount}}}}}}`
+const threadsQuery = `query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$after){totalCount pageInfo{hasNextPage endCursor} nodes{id isResolved isOutdated path line comments(first:50){nodes{id body state createdAt url viewerCanUpdate author{login}}}}} reviews(first:10,states:PENDING){nodes{id commit{oid} comments{totalCount}}}}}}`
 
 const (
 	replyMutation      = `mutation($threadId:ID!,$body:String!){addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$threadId,body:$body}){comment{id}}}`
@@ -137,14 +137,48 @@ type Threads struct {
 	Total   int
 }
 
+const maxThreadPages = 10
+
 func ThreadsArgs(owner, name string, number int) []string {
-	return []string{
+	return ThreadsPageArgs(owner, name, number, "")
+}
+
+func ThreadsPageArgs(owner, name string, number int, after string) []string {
+	args := []string{
 		"api", "graphql",
 		"-f", "query=" + threadsQuery,
 		"-f", "owner=" + owner,
 		"-f", "name=" + name,
 		"-F", "number=" + strconv.Itoa(number),
 	}
+	if after != "" {
+		args = append(args, "-f", "after="+after)
+	}
+	return args
+}
+
+func LoadThreads(ctx context.Context, run Runner, owner, name string, number int) (Threads, error) {
+	var all Threads
+	after := ""
+	for page := 0; page < maxThreadPages; page++ {
+		out, err := run(ctx, ThreadsPageArgs(owner, name, number, after))
+		if err != nil {
+			return Threads{}, err
+		}
+		threads, next, err := decodeThreadsPage(out)
+		if err != nil {
+			return Threads{}, err
+		}
+		if page == 0 {
+			all.Pending, all.Total = threads.Pending, threads.Total
+		}
+		all.Threads = append(all.Threads, threads.Threads...)
+		if next == "" {
+			break
+		}
+		after = next
+	}
+	return all, nil
 }
 
 type rawThreadComment struct {
@@ -183,8 +217,12 @@ type rawThreadsResponse struct {
 		Repository struct {
 			PullRequest struct {
 				ReviewThreads struct {
-					TotalCount int         `json:"totalCount"`
-					Nodes      []rawThread `json:"nodes"`
+					TotalCount int `json:"totalCount"`
+					PageInfo   struct {
+						HasNextPage bool   `json:"hasNextPage"`
+						EndCursor   string `json:"endCursor"`
+					} `json:"pageInfo"`
+					Nodes []rawThread `json:"nodes"`
 				} `json:"reviewThreads"`
 				Reviews struct {
 					Nodes []rawPending `json:"nodes"`
@@ -195,9 +233,14 @@ type rawThreadsResponse struct {
 }
 
 func DecodeThreads(data []byte) (Threads, error) {
+	threads, _, err := decodeThreadsPage(data)
+	return threads, err
+}
+
+func decodeThreadsPage(data []byte) (Threads, string, error) {
 	var raw rawThreadsResponse
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return Threads{}, err
+		return Threads{}, "", err
 	}
 	source := raw.Data.Repository.PullRequest
 	threads := Threads{Total: source.ReviewThreads.TotalCount}
@@ -215,7 +258,11 @@ func DecodeThreads(data []byte) (Threads, error) {
 		pending := source.Reviews.Nodes[0]
 		threads.Pending = &PendingReview{ID: pending.ID, CommitOID: pending.Commit.OID, Comments: pending.Comments.TotalCount}
 	}
-	return threads, nil
+	next := ""
+	if info := source.ReviewThreads.PageInfo; info.HasNextPage {
+		next = info.EndCursor
+	}
+	return threads, next, nil
 }
 
 var (
@@ -233,11 +280,7 @@ func AddLineComment(ctx context.Context, run Runner, repo Repo, number int, pull
 }
 
 func pendingReviewFor(ctx context.Context, run Runner, repo Repo, number int, pullRequestID, head string) (string, error) {
-	out, err := run(ctx, ThreadsArgs(repo.Owner, repo.Name, number))
-	if err != nil {
-		return "", err
-	}
-	threads, err := DecodeThreads(out)
+	threads, err := LoadThreads(ctx, run, repo.Owner, repo.Name, number)
 	if err != nil {
 		return "", err
 	}

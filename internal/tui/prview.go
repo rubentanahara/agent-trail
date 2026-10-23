@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -20,8 +19,10 @@ const (
 	prListPercentWide = 38
 	prListPercentMid  = 30
 	prMinListWidth    = 24
-	prHint            = "↑↓ move  [ ] tab  enter detail  o open  R refresh  r reply  e edit  v resolve  M merge  X close  A review  L log  E re-run  c line  S submit  / filter  ? keys  p back"
+	prHint            = "↑↓ move  [ ] tab  enter detail  o open  R refresh  r reply  e edit  v resolve  M merge  X close  A review  L log  E re-run  c line  / filter  ? keys  p back"
 	noPullRequests    = "No open pull requests"
+	clockLayout       = "15:04"
+	truncationMark    = "→"
 )
 
 func (m model) prGeometry() (listW, detailW, bodyH int, single bool) {
@@ -86,7 +87,7 @@ func (m model) prFreshness() string {
 	p := m.pr
 	switch {
 	case p.rateLimited(m.now):
-		return " · rate limited · retry in " + durationWords(p.pausedTill.Sub(m.now))
+		return " · rate limited · retry at " + p.pausedTill.Format(clockLayout)
 	case p.list.busy && p.loaded:
 		return " · refreshing…"
 	case !p.loaded || m.now.IsZero() || p.lastOK.IsZero():
@@ -95,13 +96,6 @@ func (m model) prFreshness() string {
 		return " · stale " + ageAt(p.lastOK, m.now)
 	}
 	return " · updated " + ageAt(p.lastOK, m.now) + " ago"
-}
-
-func durationWords(d time.Duration) string {
-	if d < time.Minute {
-		return strconv.Itoa(max(1, int(d.Seconds()))) + "s"
-	}
-	return strconv.Itoa(int((d+time.Minute-1)/time.Minute)) + "m"
 }
 
 func (m model) prTabStrip() string {
@@ -215,6 +209,9 @@ func (m model) prDetailRows(width, rows int) []string {
 	out := make([]string, 0, max(0, rows))
 	for i := top; i < len(lines) && len(out) < rows; i++ {
 		text := lines[i].text
+		if lines[i].kind == diffBodyLine {
+			text = ansi.Truncate(text, width, truncationMark)
+		}
 		if selectable && i == cursor && p.focus == prDetailFocus {
 			text = selectedStyle.Render(fit(ansi.Strip(text), width))
 		}
@@ -234,7 +231,11 @@ func (m model) prFooter() string {
 	case m.pr.focusedFilter() != "":
 		return promptStyle.Render("filter: " + m.pr.focusedFilter() + " (esc clears)")
 	}
-	return faintStyle.Render(fit(prHint, max(0, m.width-ansi.StringWidth("agent-trail "+m.context.Version)-1)))
+	hint := prHint
+	if m.pr.pendingCount() > 0 {
+		hint += "  S submit  D discard"
+	}
+	return faintStyle.Render(fit(hint, max(0, m.width-ansi.StringWidth("agent-trail "+m.context.Version)-1)))
 }
 
 func (m model) prOfSession(session trail.Session) (gh.PR, bool) {

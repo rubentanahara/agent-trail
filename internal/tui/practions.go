@@ -75,7 +75,7 @@ func (m *model) beginWrite(key string) bool {
 		return false
 	}
 	if p.rateLimited(m.now) {
-		m.notice = "rate limited · retry in " + durationWords(p.pausedTill.Sub(m.now)) + " · writes are refused"
+		m.notice = "rate limited · retry at " + p.pausedTill.Format(clockLayout) + " · writes are refused"
 		return false
 	}
 	p.inFlight[key] = true

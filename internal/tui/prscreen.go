@@ -597,12 +597,8 @@ func fetchPRThreads(ctx context.Context, run gh.Runner, seq, generation int, rep
 	return func() tea.Msg {
 		readCtx, cancel := context.WithTimeout(ctx, gh.ReadTimeout)
 		defer cancel()
-		out, err := run(readCtx, gh.ThreadsArgs(repo.Owner, repo.Name, number))
-		msg := prThreadsMsg{seq: seq, generation: generation, number: number, head: head, err: err}
-		if err == nil {
-			msg.threads, msg.err = gh.DecodeThreads(out)
-		}
-		return msg
+		threads, err := gh.LoadThreads(readCtx, run, repo.Owner, repo.Name, number)
+		return prThreadsMsg{seq: seq, generation: generation, number: number, head: head, threads: threads, err: err}
 	}
 }
 

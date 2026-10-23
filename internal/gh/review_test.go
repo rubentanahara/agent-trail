@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -167,5 +168,32 @@ func TestDecodeThreadsMarksPendingComments(t *testing.T) {
 	}
 	if threads.Threads[0].Comments[0].Pending || !threads.Threads[1].Comments[0].Pending {
 		t.Fatalf("pending flags = %+v", threads.Threads)
+	}
+}
+
+func TestLoadThreadsFollowsCursorsAndKeepsThePendingReviewOfTheFirstPage(t *testing.T) {
+	page := func(cursor string, more bool, pending string) []byte {
+		reviews := `[]`
+		if pending != "" {
+			reviews = `[{"id":"` + pending + `","commit":{"oid":"c"},"comments":{"totalCount":2}}]`
+		}
+		return []byte(`{"data":{"repository":{"pullRequest":{"reviewThreads":{"totalCount":2,"pageInfo":{"hasNextPage":` + strconv.FormatBool(more) + `,"endCursor":"` + cursor + `"},"nodes":[{"id":"T` + cursor + `","path":"a.go","line":1,"comments":{"nodes":[]}}]},"reviews":{"nodes":` + reviews + `}}}}}`)
+	}
+	var calls [][]string
+	run := func(_ context.Context, args []string) ([]byte, error) {
+		calls = append(calls, args)
+		if slices.Contains(args, "after=c1") {
+			return page("c2", false, ""), nil
+		}
+		return page("c1", true, "PRR_1"), nil
+	}
+
+	threads, err := LoadThreads(context.Background(), run, "o", "n", 7)
+
+	if err != nil || len(calls) != 2 || len(threads.Threads) != 2 || threads.Pending == nil || threads.Pending.ID != "PRR_1" {
+		t.Fatalf("err = %v, calls = %d, threads = %+v", err, len(calls), threads)
+	}
+	if slices.Contains(calls[0], "after=") {
+		t.Fatalf("the first page must omit the cursor: %v", calls[0])
 	}
 }
