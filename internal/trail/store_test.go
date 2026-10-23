@@ -1,6 +1,7 @@
 package trail
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -254,5 +255,56 @@ func TestCopilotSessionIsRunningWhileItsLockNamesALivePID(t *testing.T) {
 	session := New(f.home, testRepo, pricing.Table{}).Start(time.Time{}).Sessions[0]
 	if session.Liveness != LivenessRunning || session.Activity != "working" {
 		t.Fatalf("session = %+v", session)
+	}
+}
+
+func TestDeleteRemovesEveryFileOfTheSessionAndNothingElse(t *testing.T) {
+	f := newFixture(t)
+	f.write(claudeDir+"gone.jsonl", claudePrompt("bye", testRepo, stampNow))
+	f.write(claudeDir+"gone/subagents/agent-1.jsonl", `{"type":"assistant","isSidechain":true,"cwd":"`+testRepo+`","timestamp":"`+stampLater+`","message":{"content":[{"type":"text","text":"sub"}]}}`)
+	f.write(claudeDir+"gone/tool-results/r.txt", "output")
+	f.write(claudeDir+"kept.jsonl", claudePrompt("stay", testRepo, stampNow))
+	f.write(".copilot/session-state/c1/workspace.yaml", "cwd: "+testRepo)
+	f.write(".copilot/session-state/c1/events.jsonl", `{"type":"user.message","timestamp":"`+stampNow+`","data":{"content":"hi"}}`)
+	follower := New(f.home, testRepo, pricing.Table{})
+	follower.Start(time.Time{})
+	for _, key := range []string{"claude:gone", "copilot:c1"} {
+		if err := follower.Delete(key); err != nil {
+			t.Fatalf("Delete(%s): %v", key, err)
+		}
+	}
+	for _, path := range []string{claudeDir + "gone.jsonl", claudeDir + "gone", ".copilot/session-state/c1"} {
+		if _, err := os.Stat(filepath.Join(f.home, path)); !os.IsNotExist(err) {
+			t.Errorf("%s still exists", path)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(f.home, claudeDir+"kept.jsonl")); err != nil {
+		t.Fatalf("kept session was touched: %v", err)
+	}
+	if batch := follower.Poll(); len(batch.Events) != 0 || len(batch.Sessions) != 0 {
+		t.Fatalf("deleted session came back: %+v", batch)
+	}
+}
+
+func TestDeleteRefusesARunningSession(t *testing.T) {
+	f := newFixture(t)
+	f.write(claudeDir+"live.jsonl", claudePrompt("busy", testRepo, stampNow))
+	f.write(".claude/sessions/1.json", `{"pid":`+strconv.Itoa(os.Getpid())+`,"sessionId":"live","status":"busy"}`)
+	follower := New(f.home, testRepo, pricing.Table{})
+	follower.Start(time.Time{})
+	if err := follower.Delete("claude:live"); !errors.Is(err, ErrSessionRunning) {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(f.home, claudeDir+"live.jsonl")); err != nil {
+		t.Fatalf("running transcript removed: %v", err)
+	}
+}
+
+func TestToolCallsRecordTheFilesTheyTouch(t *testing.T) {
+	f := newFixture(t)
+	f.write(claudeDir+"a.jsonl", `{"type":"assistant","cwd":"`+testRepo+`","timestamp":"`+stampNow+`","message":{"content":[{"type":"tool_use","name":"Edit","input":{"file_path":"/work/app/main.go","old_string":"a"}}]}}`)
+	events := New(f.home, testRepo, pricing.Table{}).Start(time.Time{}).Events
+	if len(events) != 1 || strings.Join(events[0].Files, ",") != "/work/app/main.go" {
+		t.Fatalf("events = %+v", events)
 	}
 }

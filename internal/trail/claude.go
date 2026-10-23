@@ -134,6 +134,13 @@ func claudeSessionID(path string) string {
 	return strings.TrimSuffix(filepath.Base(path), ".jsonl")
 }
 
+func claudeArtifacts(path string) []string {
+	if filepath.Base(filepath.Dir(path)) == claudeSubagentDir {
+		return []string{filepath.Dir(filepath.Dir(path))}
+	}
+	return []string{path, strings.TrimSuffix(path, ".jsonl")}
+}
+
 func claudeProjectPrefix(repo string) string {
 	return nonAlphanumeric.ReplaceAllString(repo, "-")
 }
@@ -295,7 +302,7 @@ func claudeBlockEvent(agent string, speaker Kind, block claudeBlock) (Event, boo
 	case "thinking":
 		return Event{Agent: agent, Kind: KindThinking, Text: firstNonEmpty(block.Thinking, hiddenThinking)}, true
 	case "tool_use":
-		return Event{Agent: agent, Kind: KindTool, Text: block.Name + " " + argumentsText(block.Input)}, true
+		return Event{Agent: agent, Kind: KindTool, Text: block.Name + " " + argumentsText(block.Input), Files: pathArguments(block.Input)}, true
 	case "tool_result":
 		text := rawText(block.Content)
 		if len(block.Content) > 0 && block.Content[0] == '[' {

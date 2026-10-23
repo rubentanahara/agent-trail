@@ -87,6 +87,10 @@ func newCopilotParser(string) parser {
 	return copilotParser{}
 }
 
+func copilotArtifacts(path string) []string {
+	return []string{filepath.Dir(path)}
+}
+
 func copilotSessionID(path string) string {
 	return filepath.Base(filepath.Dir(path))
 }
@@ -167,6 +171,9 @@ func copilotEvents(eventType string, data copilotData) []Event {
 		return nil
 	}
 	event := Event{Kind: kind, Text: text}
+	if eventType == "tool.execution_start" {
+		event.Files = pathArguments(data.Arguments)
+	}
 	if eventType == "session.usage_record" && data.Usage != nil {
 		usage := copilotUsageOf(*data.Usage)
 		event.Usage = &usage

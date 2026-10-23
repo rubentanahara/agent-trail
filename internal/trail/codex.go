@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -94,6 +96,10 @@ type codexParser struct {
 
 func newCodexParser(string) parser {
 	return &codexParser{seenResponses: map[string]bool{}}
+}
+
+func codexArtifacts(path string) []string {
+	return []string{path}
 }
 
 func codexSessionID(path string) string {
@@ -261,7 +267,7 @@ func codexItemEvents(raw json.RawMessage) []Event {
 			{Kind: KindResult, Text: codexCommandStatus(item) + item.AggregatedOutput},
 		}
 	case "FileChange":
-		return []Event{{Kind: KindEdit, Text: codexChanges(item.Changes)}}
+		return []Event{{Kind: KindEdit, Text: codexChanges(item.Changes), Files: slices.Collect(maps.Keys(item.Changes))}}
 	}
 	kind := Kind(item.Type)
 	if kind == "" {

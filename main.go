@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -17,10 +18,17 @@ import (
 	"github.com/rubentanahara/agent-trail/internal/tui"
 )
 
-var version = "dev"
+const (
+	devVersion        = "dev"
+	unstampedVersion  = "(devel)"
+	modulePrefixLabel = "v"
+)
+
+var version = devVersion
 
 const (
 	defaultReplayDays = 2.0
+	statsDays         = 30
 	hoursPerDay       = 24
 	exitUsage         = 2
 )
@@ -87,7 +95,7 @@ func isFlagSet(flags *flag.FlagSet, name string) bool {
 
 func run(opts options) error {
 	if opts.version {
-		fmt.Println("agent-trail", version)
+		fmt.Println("agent-trail", buildVersion())
 		return nil
 	}
 	repo, err := repository(opts.repo)
@@ -114,7 +122,32 @@ func run(opts options) error {
 	if opts.once || !isTerminal(os.Stdout) {
 		return printHistory(os.Stdout, history.Events)
 	}
-	return tui.Run(follower, history, tui.Context{Repo: repo, PricesAsOf: prices.FetchedAt, PriceWarning: status.Warning})
+	return tui.Run(follower, history, tui.Context{
+		Repo: repo, Version: buildVersion(), PricesAsOf: prices.FetchedAt, PriceWarning: status.Warning,
+		Everywhere: trail.New(home, "", prices), StatsSince: statsSince(opts.all, cutoff),
+	})
+}
+
+func buildVersion() string {
+	if version != devVersion {
+		return version
+	}
+	info, ok := debug.ReadBuildInfo()
+	if !ok || info.Main.Version == "" || info.Main.Version == unstampedVersion {
+		return version
+	}
+	return strings.TrimPrefix(info.Main.Version, modulePrefixLabel)
+}
+
+func statsSince(all bool, cutoff time.Time) time.Time {
+	if all {
+		return time.Time{}
+	}
+	monthAgo := time.Now().AddDate(0, 0, -statsDays)
+	if cutoff.Before(monthAgo) {
+		return cutoff
+	}
+	return monthAgo
 }
 
 func printPrices(out io.Writer, prices pricing.Table, status pricing.Status, events []trail.Event) error {

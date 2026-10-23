@@ -63,6 +63,10 @@ When stdout is not a terminal it prints the history as plain text and exits.
 | `u` | Show or hide token-usage rows |
 | `r` | Detail pane: readable text or the raw JSON record, indented and coloured |
 | `f` | Turn auto-scroll to the newest event on or off |
+| `z` | Zoom the focused pane to the whole screen, or restore the layout. While zoomed, `1` `2` `3` and `tab` switch which pane fills the screen |
+| `o` | Sessions pane: show only running sessions, or all again. Codex sessions never show as running (see State) |
+| `x` | Sessions pane: delete the selected session and its transcript files, after you confirm with `y`. Running sessions cannot be deleted |
+| `t` | Open or close the stats screen (see below) |
 | `q` | Quit |
 
 Mouse: the wheel scrolls the pane under the pointer, a click selects a row.
@@ -75,17 +79,42 @@ Mouse: the wheel scrolls the pane under the pointer, a click selects a row.
 |---|---|
 | Sessions | Keeps sessions whose name, CLI, model, agent, branch, state or billing match |
 | Events | Keeps events whose CLI, agent, kind or text match |
-| Detail | Keeps only the lines of the selected event that contain your words |
+| Detail | Keeps only the lines of the selected event that match your words |
 
 Query syntax, the same in every pane:
 
 | Query | Matches |
 |---|---|
-| `make chk` | Every word must match. In the sessions and events panes a word matches fuzzily: its letters appear in order (`chk` matches `check`) |
+| `make chk` | Every word must match, fuzzily: its letters appear in order (`chk` matches `check`). The matched letters are highlighted |
 | `'codex` | Exact text |
 | `!attachment` | Excludes rows containing the text |
 
 Examples: `'codex 'tool`, `'failed`, `'claude/web-fetch`, `!usage`. In the sessions pane, `running` or `'api` find live sessions or API-billed ones.
+
+### Deleting a session
+
+`x` removes these files, and only after `y`:
+
+| CLI | Removed |
+|---|---|
+| Claude Code | `~/.claude/projects/<project>/<id>.jsonl` and the `<id>/` folder beside it (subagents, tool results) |
+| Codex | the session's `rollout-*.jsonl`. Its name stays in `~/.codex/session_index.jsonl` |
+| Copilot CLI | `~/.copilot/session-state/<id>/` |
+
+The deletion is permanent; nothing goes to the trash.
+
+### Stats screen
+
+`t` opens a separate screen with charts across every repository, not only the one you follow. It reads the last 30 days, or the whole history with `--all`, and takes a few seconds the first time.
+
+| Chart | Measure |
+|---|---|
+| Which CLI you use most | Prompts you typed, with sessions, cost and the share of input tokens read from the prompt cache |
+| Which project you work on most | Prompts per git repository, found from each session's working directory |
+| Which file types the agents touch | Tool calls that name a file (`file_path`, `notebook_path`, `path`, Codex file changes), by extension |
+| Spend | Cost of the current minute, hour, day, week and month, the average per period over the window, and bars for the last 60 minutes, 24 hours and 30 days |
+
+Costs use API list prices, so subscription usage is an API-equivalent figure.
 
 ## What it shows
 

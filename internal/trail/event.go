@@ -45,6 +45,7 @@ type Event struct {
 	Summary string
 	Session string
 	Usage   *Usage
+	Files   []string
 	Source  Source
 }
 

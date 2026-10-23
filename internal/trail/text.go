@@ -50,6 +50,23 @@ func compactJSON(raw json.RawMessage) string {
 	return out.String()
 }
 
+var pathArgumentKeys = []string{"file_path", "notebook_path", "path"}
+
+func pathArguments(raw json.RawMessage) []string {
+	var arguments map[string]json.RawMessage
+	if json.Unmarshal(raw, &arguments) != nil {
+		return nil
+	}
+	var paths []string
+	for _, key := range pathArgumentKeys {
+		var path string
+		if json.Unmarshal(arguments[key], &path) == nil && path != "" {
+			paths = append(paths, path)
+		}
+	}
+	return paths
+}
+
 func argumentsText(raw json.RawMessage) string {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {

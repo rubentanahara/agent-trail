@@ -48,6 +48,8 @@ var (
 	apiStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("203"))
 	runningStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 	selectedStyle = lipgloss.NewStyle().Reverse(true)
+	matchStyle    = lipgloss.NewStyle().Bold(true).Underline(true).Foreground(lipgloss.Color("226"))
+	matchOnSelect = matchStyle.Reverse(true)
 	titleStyle    = lipgloss.NewStyle().Bold(true)
 	labelStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	focusColour   = lipgloss.Color("75")
@@ -65,6 +67,9 @@ type geometry struct {
 }
 
 func (m model) layout() geometry {
+	if m.zoomed {
+		return m.zoomedLayout()
+	}
 	bodyH := m.height - footerHeight
 	g := geometry{showLeft: m.width >= hideLeftBelow, rightW: m.width}
 	if g.showLeft {
@@ -74,6 +79,17 @@ func (m model) layout() geometry {
 	}
 	g.eventsH, g.detailH = split(bodyH, bodyH-max(minPaneHeight, bodyH*eventsPercent/100))
 	return g
+}
+
+func (m model) zoomedLayout() geometry {
+	bodyH := m.height - footerHeight
+	switch m.focus {
+	case sessionsPane:
+		return geometry{showLeft: true, leftW: m.width, sessionsH: bodyH}
+	case eventsPane:
+		return geometry{rightW: m.width, eventsH: bodyH}
+	}
+	return geometry{rightW: m.width, detailH: bodyH}
 }
 
 func split(total, lower int) (int, int) {
@@ -106,6 +122,9 @@ func (m model) render() string {
 	if m.width < minimumWidth || m.height < minimumHeight {
 		return tooSmallMessage
 	}
+	if m.showStats {
+		return m.renderStats()
+	}
 	g := m.layout()
 	right := stack(
 		box(m.eventsTitle(), m.eventRows(g.rightW-2, g.eventsH-borderAndTitle-1), g.rightW, g.eventsH, m.focus == eventsPane),
@@ -119,7 +138,11 @@ func (m model) render() string {
 		)
 		body = lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, body, fit(m.footer(), m.width))
+	return lipgloss.JoinVertical(lipgloss.Left, body, m.footerLine(m.footer()))
+}
+
+func (m model) footerLine(text string) string {
+	return spread(text, faintStyle.Render("agent-trail "+m.context.Version), m.width)
 }
 
 func stack(boxes ...string) string {
@@ -166,8 +189,11 @@ func cliStyle(cli trail.CLI) lipgloss.Style {
 
 func (m model) sessionsTitle() string {
 	title := fmt.Sprintf("Sessions (%d)", len(m.order)) + filterBadge(m.filterText[sessionsPane], "filter")
+	if m.runningOnly {
+		title += promptStyle.Render(" · running only")
+	}
 	if m.focus == sessionsPane {
-		title += faintStyle.Render(" ↑↓ pick · enter open")
+		title += faintStyle.Render(" ↑↓ pick · enter open · x delete")
 	}
 	return title
 }
@@ -218,24 +244,25 @@ func age(at time.Time) string {
 }
 
 func (m model) eventRows(width, rows int) []string {
-	out := make([]string, 0, rows)
+	out := make([]string, 0, max(0, rows))
 	for row := m.eventTop; row < len(m.visible) && len(out) < rows; row++ {
 		event := m.events[m.visible[row]]
+		stamp := event.Time.Local().Format(timeLayout) + " "
 		if row == m.eventCursor {
-			out = append(out, selectedStyle.Render(fit(plainEventRow(event), width)))
+			body := selectedStyle.Render(fit(plainEventBody(event), width-len(stamp)))
+			out = append(out, selectedStyle.Render(stamp)+m.filter.highlight(body, matchOnSelect))
 			continue
 		}
-		out = append(out, styledEventRow(event))
+		out = append(out, faintStyle.Render(stamp)+m.filter.highlight(styledEventBody(event), matchStyle))
 	}
 	return out
 }
 
-func plainEventRow(event trail.Event) string {
-	return fmt.Sprintf("%s %s %s %s", event.Time.Local().Format(timeLayout), fit(event.Who(), whoWidth), fit(string(event.Kind), kindWidth), event.Summary)
+func plainEventBody(event trail.Event) string {
+	return fmt.Sprintf("%s %s %s", fit(event.Who(), whoWidth), fit(string(event.Kind), kindWidth), event.Summary)
 }
 
-func styledEventRow(event trail.Event) string {
-	stamp := faintStyle.Render(event.Time.Local().Format(timeLayout))
+func styledEventBody(event trail.Event) string {
 	who := cliStyle(event.CLI).Render(fit(event.Who(), whoWidth))
 	kind := fit(string(event.Kind), kindWidth)
 	summary := event.Summary
@@ -249,7 +276,7 @@ func styledEventRow(event trail.Event) string {
 	default:
 		kind = cliStyle(event.CLI).Render(kind)
 	}
-	return stamp + " " + who + " " + kind + " " + summary
+	return who + " " + kind + " " + summary
 }
 
 func (m model) sessionRows(width, rows int) []string {
@@ -257,14 +284,14 @@ func (m model) sessionRows(width, rows int) []string {
 	lines := []string{spread(all, fmt.Sprintf("%d ev", len(m.events)), width)}
 	for _, key := range m.order {
 		session := m.sessions[key]
-		label := marker(key == m.activeSession) + cliStyle(session.CLI).Render(stateGlyph(session)) + sessionLabel(session)
+		label := marker(key == m.activeSession) + cliStyle(session.CLI).Render(stateGlyph(session)) + m.sessionQuery.highlight(sessionLabel(session), matchStyle)
 		lines = append(lines, spread(label, faintStyle.Render(fmt.Sprintf("%4s ", age(session.Last)))+sessionMetric(session), width))
 	}
-	out := make([]string, 0, rows)
+	out := make([]string, 0, max(0, rows))
 	for row := m.sessionTop; row < len(lines) && len(out) < rows; row++ {
 		line := lines[row]
 		if row == m.sessionCursor && m.focus == sessionsPane {
-			line = selectedStyle.Render(fit(ansi.Strip(line), width))
+			line = m.sessionQuery.highlight(selectedStyle.Render(fit(ansi.Strip(line), width)), matchOnSelect)
 		}
 		out = append(out, line)
 	}
@@ -580,14 +607,21 @@ func (m model) matchingLines(text string) string {
 	}
 	var kept []string
 	for _, line := range strings.Split(text, "\n") {
-		if m.detailQuery.matchesExactly(strings.ToLower(ansi.Strip(line))) {
-			kept = append(kept, line)
+		if m.detailQuery.matches(strings.ToLower(ansi.Strip(line))) {
+			kept = append(kept, m.detailQuery.highlight(line, matchStyle))
 		}
 	}
 	if len(kept) == 0 {
 		return faintStyle.Render("no line matches")
 	}
 	return strings.Join(kept, "\n")
+}
+
+func zoomAction(zoomed bool) string {
+	if zoomed {
+		return "restore"
+	}
+	return "zoom"
 }
 
 func shownOrHidden(shown bool) string {
@@ -598,10 +632,15 @@ func shownOrHidden(shown bool) string {
 }
 
 func (m model) footer() string {
-	if m.searching {
+	switch {
+	case m.searching:
 		return m.search.View()
+	case m.confirmDelete != "":
+		return apiStyle.Render(fmt.Sprintf("Delete %q and its transcript files permanently? y deletes · any other key cancels", sessionLabel(m.sessions[m.confirmDelete])))
+	case m.notice != "":
+		return promptStyle.Render(m.notice)
 	}
-	status := faintStyle.Render(strings.Join([]string{"1 2 3/tab panes", "/ filter pane", "enter open", "s event's session", "a all", "n " + shownOrHidden(!m.hideNoise) + " noise", "u usage", "r raw", "f follow", "q quit"}, "  "))
+	status := faintStyle.Render(strings.Join([]string{"1 2 3/tab panes", "/ filter pane", "z " + zoomAction(m.zoomed), "o running only", "t stats", "enter open", "s event's session", "a all", "n " + shownOrHidden(!m.hideNoise) + " noise", "u usage", "r raw", "f follow", "q quit"}, "  "))
 	if text := m.filterText[m.focus]; text != "" {
 		status = promptStyle.Render("filter: "+text+" (esc clears)") + "  " + status
 	}

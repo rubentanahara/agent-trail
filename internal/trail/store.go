@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/rubentanahara/agent-trail/internal/pricing"
@@ -25,13 +26,14 @@ type source struct {
 	belongs    func(path, repo string) (belongs, decided bool)
 	newParser  func(path string) parser
 	sessionID  func(path string) string
+	artifacts  func(path string) []string
 }
 
 func sources(home, repo string) []source {
 	return []source{
-		{Claude, func() []string { return claudeCandidates(home, repo) }, claudeBelongs, newClaudeParser, claudeSessionID},
-		{Codex, func() []string { return codexCandidates(home) }, codexBelongs, newCodexParser, codexSessionID},
-		{Copilot, func() []string { return copilotCandidates(home) }, copilotBelongs, newCopilotParser, copilotSessionID},
+		{Claude, func() []string { return claudeCandidates(home, repo) }, claudeBelongs, newClaudeParser, claudeSessionID, claudeArtifacts},
+		{Codex, func() []string { return codexCandidates(home) }, codexBelongs, newCodexParser, codexSessionID, codexArtifacts},
+		{Copilot, func() []string { return copilotCandidates(home) }, copilotBelongs, newCopilotParser, copilotSessionID, copilotArtifacts},
 	}
 }
 
@@ -51,6 +53,7 @@ type Batch struct {
 }
 
 type Trail struct {
+	mu          sync.Mutex
 	home        string
 	repo        string
 	cutoff      time.Time
@@ -81,6 +84,8 @@ func New(home, repo string, prices pricing.Table) *Trail {
 }
 
 func (t *Trail) Start(cutoff time.Time) Batch {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.cutoff = cutoff
 	var events []Event
 	for _, path := range t.discover() {
@@ -96,6 +101,8 @@ func (t *Trail) Start(cutoff time.Time) Batch {
 }
 
 func (t *Trail) Poll() Batch {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	var events []Event
 	for _, path := range t.discover() {
 		events = append(events, t.read(path, t.transcripts[path])...)
@@ -115,6 +122,30 @@ func (t *Trail) Poll() Batch {
 		}
 	}
 	return t.finish(events)
+}
+
+var ErrSessionRunning = errors.New("session is running; close it before deleting")
+
+func (t *Trail) Delete(key string) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if session := t.sessions[key]; session != nil && session.Liveness == LivenessRunning {
+		return ErrSessionRunning
+	}
+	for path, file := range t.transcripts {
+		if file.sessionKey != key {
+			continue
+		}
+		for _, target := range file.source.artifacts(path) {
+			if err := os.RemoveAll(target); err != nil {
+				return err
+			}
+		}
+		delete(t.transcripts, path)
+	}
+	delete(t.sessions, key)
+	delete(t.changed, key)
+	return nil
 }
 
 func (t *Trail) finish(events []Event) Batch {

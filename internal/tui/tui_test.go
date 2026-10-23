@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/rubentanahara/agent-trail/internal/trail"
@@ -198,5 +199,113 @@ func TestEventsTitleShowsTheRealStateOfTheSelectedSession(t *testing.T) {
 	m = press(m, "1", "down", "down")
 	if title := ansi.Strip(m.eventsTitle()); !strings.Contains(title, "closed") || strings.Contains(title, "running") {
 		t.Fatalf("closed-session title = %q", title)
+	}
+}
+
+func TestHighlightMarksTheMatchedCharacters(t *testing.T) {
+	brackets := lipgloss.NewStyle().Transform(func(s string) string { return "[" + s + "]" })
+	cases := []struct{ query, line, want string }{
+		{"cdx", "codex user", "[c]o[d]e[x] user"},
+		{"co", "codex", "[co]dex"},
+		{"'us", "user uses", "[us]er [us]es"},
+		{"!user", "user", "user"},
+		{"zz", "fizz buzz", "fi[zz] buzz"},
+		{"zq", "fizz buzz", "fizz buzz"},
+	}
+	for _, c := range cases {
+		if got := ansi.Strip(parseQuery(c.query).highlight(c.line, brackets)); got != c.want {
+			t.Errorf("highlight(%q, %q) = %q, want %q", c.query, c.line, got, c.want)
+		}
+	}
+}
+
+func TestDetailFilterMatchesFuzzily(t *testing.T) {
+	m := sized(newModel(nil, sampleBatch(), Context{Repo: "/repo"}), 120, 40)
+	m.detailShown, m.detailData = 0, trail.Detail{Text: "make check passed\nbeta line"}
+	m = press(m, "3", "/", "m", "c", "k", "enter")
+	if content := ansi.Strip(m.detailContent()); !strings.Contains(content, "make check") || strings.Contains(content, "beta") {
+		t.Fatalf("content = %q", content)
+	}
+}
+
+func TestZoomShowsOnlyTheFocusedPane(t *testing.T) {
+	m := press(sized(newModel(nil, sampleBatch(), Context{Repo: "/repo"}), 120, 40), "z")
+	screen := ansi.Strip(m.render())
+	if !strings.Contains(screen, "Events:") || strings.Contains(screen, "Sessions (") || strings.Contains(screen, "Detail") {
+		t.Fatalf("events zoom shows other panes:\n%s", screen)
+	}
+	m = press(m, "1")
+	if screen = ansi.Strip(m.render()); !strings.Contains(screen, "Sessions (") || strings.Contains(screen, "Events:") {
+		t.Fatalf("zoom did not follow focus:\n%s", screen)
+	}
+	m = press(m, "z")
+	if screen = ansi.Strip(m.render()); !strings.Contains(screen, "Sessions (") || !strings.Contains(screen, "Events:") {
+		t.Fatalf("z did not restore the layout:\n%s", screen)
+	}
+}
+
+func TestRunningOnlyHidesClosedSessions(t *testing.T) {
+	batch := sampleBatch()
+	batch.Sessions[1].Liveness = trail.LivenessRunning
+	m := press(sized(newModel(nil, batch, Context{Repo: "/repo"}), 120, 40), "o")
+	if strings.Join(m.order, ",") != "codex:b" {
+		t.Fatalf("order = %v", m.order)
+	}
+	if m = press(m, "o"); len(m.order) != 2 {
+		t.Fatalf("after second o, order = %v", m.order)
+	}
+}
+
+func TestDeleteAsksFirstAndCancelsOnAnyOtherKey(t *testing.T) {
+	m := sized(newModel(nil, sampleBatch(), Context{Repo: "/repo"}), 120, 40)
+	m = press(m, "1", "down", "x")
+	if m.confirmDelete != "codex:b" || !strings.Contains(m.footer(), "permanently") {
+		t.Fatalf("confirm = %q footer = %q", m.confirmDelete, m.footer())
+	}
+	m = press(m, "n")
+	if m.confirmDelete != "" || len(m.order) != 2 {
+		t.Fatalf("after n: confirm = %q order = %v", m.confirmDelete, m.order)
+	}
+}
+
+func TestDeletedSessionDisappearsWithItsEvents(t *testing.T) {
+	m := sized(newModel(nil, sampleBatch(), Context{Repo: "/repo"}), 120, 40)
+	m = press(m, "1", "down")
+	updated, _ := m.Update(deletedMsg{key: "codex:b", label: "tests"})
+	m = updated.(model)
+	if strings.Join(m.order, ",") != "claude:a" || m.activeSession != "" || len(m.events) != 2 || len(m.visible) != 2 {
+		t.Fatalf("order = %v active = %q events = %d visible = %d", m.order, m.activeSession, len(m.events), len(m.visible))
+	}
+}
+
+func TestStatsScreenFitsTheTerminal(t *testing.T) {
+	m := sized(newModel(nil, sampleBatch(), Context{Repo: "/repo"}), 120, 30)
+	m = press(m, "t")
+	updated, _ := m.Update(statsMsg{sampleBatch()})
+	m = updated.(model)
+	lines := strings.Split(m.render(), "\n")
+	if len(lines) != 30 || !strings.Contains(ansi.Strip(m.render()), "Which CLI") {
+		t.Fatalf("%d lines:\n%s", len(lines), ansi.Strip(m.render()))
+	}
+	for _, line := range lines {
+		if ansi.StringWidth(line) > 120 {
+			t.Fatalf("line too wide: %q", ansi.Strip(line))
+		}
+	}
+	if m = press(m, "esc"); m.showStats {
+		t.Fatal("esc did not leave the stats screen")
+	}
+}
+
+func TestVersionSitsInTheBottomRightCorner(t *testing.T) {
+	for _, screen := range []string{"", "t"} {
+		m := sized(newModel(nil, sampleBatch(), Context{Repo: "/repo", Version: "1.2.3"}), 120, 30)
+		if screen != "" {
+			m = press(m, screen)
+		}
+		lines := strings.Split(ansi.Strip(m.render()), "\n")
+		if last := lines[len(lines)-1]; !strings.HasSuffix(last, " agent-trail 1.2.3") || ansi.StringWidth(last) != 120 {
+			t.Fatalf("screen %q footer = %q", screen, last)
+		}
 	}
 }

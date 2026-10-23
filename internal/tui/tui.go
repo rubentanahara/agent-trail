@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/rubentanahara/agent-trail/internal/stats"
 	"github.com/rubentanahara/agent-trail/internal/trail"
 )
 
@@ -36,14 +37,26 @@ type batchMsg struct{ batch trail.Batch }
 
 type detailMsg struct {
 	index  int
+	source trail.Source
 	detail trail.Detail
 	err    error
 }
 
+type deletedMsg struct {
+	key   string
+	label string
+	err   error
+}
+
+type statsMsg struct{ batch trail.Batch }
+
 type Context struct {
 	Repo         string
+	Version      string
 	PricesAsOf   string
 	PriceWarning string
+	Everywhere   *trail.Trail
+	StatsSince   time.Time
 }
 
 type model struct {
@@ -65,6 +78,8 @@ type model struct {
 	follow      bool
 	showUsage   bool
 	hideNoise   bool
+	runningOnly bool
+	zoomed      bool
 
 	focus        pane
 	search       textinput.Model
@@ -81,6 +96,13 @@ type model struct {
 	detailData      trail.Detail
 	detailErr       error
 	raw             bool
+
+	confirmDelete string
+	notice        string
+
+	showStats    bool
+	stats        *stats.Stats
+	statsLoading bool
 
 	width  int
 	height int
@@ -132,7 +154,7 @@ func (m model) poll() tea.Cmd {
 func loadDetail(index int, event trail.Event) tea.Cmd {
 	return func() tea.Msg {
 		detail, err := trail.LoadDetail(event)
-		return detailMsg{index: index, detail: detail, err: err}
+		return detailMsg{index: index, source: event.Source, detail: detail, err: err}
 	}
 }
 
@@ -150,6 +172,10 @@ func (m *model) requestDetail() tea.Cmd {
 	return loadDetail(index, m.events[index])
 }
 
+func (m model) detailStillWanted(msg detailMsg) bool {
+	return msg.index == m.detailRequested && msg.index < len(m.events) && m.events[msg.index].Source == msg.source
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
@@ -157,12 +183,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		m.refreshDetail()
 	case pollMsg:
-		return m, m.poll()
+		return m, tea.Batch(m.poll(), m.pollStats())
 	case batchMsg:
 		m.absorb(msg.batch)
 		cmds = append(cmds, tick())
+	case statsMsg:
+		m.absorbStats(msg.batch)
+	case deletedMsg:
+		m.finishDelete(msg)
 	case detailMsg:
-		if msg.index == m.detailRequested {
+		if m.detailStillWanted(msg) {
 			m.detailData, m.detailErr, m.detailShown = msg.detail, msg.err, msg.index
 			m.refreshDetail()
 			m.detail.GotoTop()
@@ -172,9 +202,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseClickMsg:
 		m.click(msg.Mouse())
 	case tea.KeyPressMsg:
+		before := m.layout()
 		cmd, quit := m.key(msg)
 		if quit {
 			return m, tea.Quit
+		}
+		if m.layout() != before {
+			m.refreshDetail()
 		}
 		cmds = append(cmds, cmd)
 	}
@@ -211,7 +245,11 @@ func (m *model) reorderSessions() {
 		}
 	}
 	m.order = slices.DeleteFunc(m.order, func(key string) bool {
-		return !m.sessionQuery.matches(sessionHaystack(m.sessions[key]))
+		session := m.sessions[key]
+		if m.runningOnly && session.Liveness != trail.LivenessRunning {
+			return true
+		}
+		return !m.sessionQuery.matches(sessionHaystack(session))
 	})
 	sort.Slice(m.order, func(i, j int) bool {
 		return m.sessions[m.order[i]].Last.After(m.sessions[m.order[j]].Last)
@@ -292,12 +330,25 @@ func (m *model) moveEvents(delta int) {
 }
 
 func (m *model) key(msg tea.KeyPressMsg) (tea.Cmd, bool) {
-	if m.searching {
+	m.notice = ""
+	switch {
+	case m.searching:
 		return m.searchKey(msg), false
+	case m.confirmDelete != "":
+		return m.confirmKey(msg.String()), false
+	case m.showStats:
+		return m.statsKey(msg.String())
 	}
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return nil, true
+	case "t":
+		return m.openStats(), false
+	case "z":
+		m.zoomed = !m.zoomed
+	case "o":
+		m.runningOnly = !m.runningOnly
+		m.reorderSessions()
 	case "tab":
 		m.focus = (m.focus + 1) % paneCount
 	case "shift+tab":
@@ -424,6 +475,8 @@ func (m *model) paneKey(msg tea.KeyPressMsg) tea.Cmd {
 
 func (m *model) sessionsKey(key string) {
 	switch key {
+	case "x":
+		m.askDelete()
 	case "up", "k":
 		m.selectSession(m.sessionCursor - 1)
 	case "down", "j":
@@ -516,4 +569,94 @@ func scrollTop(top, cursor, total, rows int) int {
 		top = cursor - rows + 1
 	}
 	return max(0, min(top, total-rows))
+}
+
+func (m *model) askDelete() {
+	session, ok := m.sessions[m.sessionKeyAt(m.sessionCursor)]
+	switch {
+	case !ok:
+		m.notice = "pick a session to delete"
+	case session.Liveness == trail.LivenessRunning:
+		m.notice = trail.ErrSessionRunning.Error()
+	default:
+		m.confirmDelete = session.Key
+	}
+}
+
+func (m *model) confirmKey(key string) tea.Cmd {
+	target := m.confirmDelete
+	m.confirmDelete = ""
+	if key != "y" {
+		m.notice = "delete cancelled"
+		return nil
+	}
+	follower, label := m.follower, sessionLabel(m.sessions[target])
+	return func() tea.Msg {
+		return deletedMsg{key: target, label: label, err: follower.Delete(target)}
+	}
+}
+
+func (m *model) finishDelete(msg deletedMsg) {
+	if msg.err != nil {
+		m.notice = "delete failed: " + msg.err.Error()
+		return
+	}
+	m.notice = "deleted " + msg.label
+	m.forgetSession(msg.key)
+}
+
+func (m *model) forgetSession(key string) {
+	delete(m.sessions, key)
+	kept := 0
+	for i, event := range m.events {
+		if event.Session != key {
+			m.events[kept], m.haystack[kept] = event, m.haystack[i]
+			kept++
+		}
+	}
+	m.events, m.haystack = m.events[:kept], m.haystack[:kept]
+	if m.activeSession == key {
+		m.activeSession = ""
+	}
+	m.reorderSessions()
+	m.detailRequested, m.detailShown, m.detailData = noEvent, noEvent, trail.Detail{}
+	m.visible = m.visible[:0]
+	m.refilter()
+	m.refreshDetail()
+}
+
+func (m *model) openStats() tea.Cmd {
+	m.showStats = true
+	if m.stats != nil || m.statsLoading || m.context.Everywhere == nil {
+		return nil
+	}
+	m.statsLoading = true
+	everywhere, since := m.context.Everywhere, m.context.StatsSince
+	return func() tea.Msg { return statsMsg{everywhere.Start(since)} }
+}
+
+func (m *model) statsKey(key string) (tea.Cmd, bool) {
+	switch key {
+	case "q", "ctrl+c":
+		return nil, true
+	case "t", "esc":
+		m.showStats = false
+	}
+	return nil, false
+}
+
+func (m *model) absorbStats(batch trail.Batch) {
+	if m.stats == nil {
+		m.stats = stats.New(m.context.StatsSince)
+		m.statsLoading = false
+	}
+	m.stats.Add(batch)
+}
+
+func (m model) pollStats() tea.Cmd {
+	if !m.showStats || m.stats == nil {
+		return nil
+	}
+	everywhere := m.context.Everywhere
+	return func() tea.Msg { return statsMsg{everywhere.Poll()} }
 }
