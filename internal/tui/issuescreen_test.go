@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -141,5 +142,37 @@ func TestIssueScreenFitsEveryWidth(t *testing.T) {
 				t.Fatalf("width %d: empty rendered line", width)
 			}
 		}
+	}
+}
+
+func TestEnterOnALinkedOpenPullRequestJumpsToThePullRequestScreen(t *testing.T) {
+	fake := newIssueFake(t)
+	detail := strings.Replace(string(testdata(t, "issue_detail.json")), `"number": 9,`, fmt.Sprintf(`"number": %d,`, prBranchPR), 1)
+	board, _ := gh.DecodeBoard(testdata(t, "board.json"))
+	for _, issue := range append(board.Open, board.Projects[0].Issues...) {
+		fake.set(gh.IssueDetailArgs("rubentanahara", "agent-trail", issue.Number), []byte(detail))
+	}
+	fake.set(gh.ViewArgs(prBranchPR), viewJSON(t, prBranchPR))
+	m := pressPR(openedPRs(t, fake), "p")
+	m.issues.run = fake.run
+	m = pressPR(m, "i")
+
+	m = pressPR(m, "]", "]", "2", "down", "enter")
+
+	if m.issues.shown || !m.pr.shown || m.pr.selectedNumber() != prBranchPR {
+		t.Fatalf("issues %v, prs %v, selected %d", m.issues.shown, m.pr.shown, m.pr.selectedNumber())
+	}
+}
+
+func TestEnterOnAPullRequestThatIsNotOpenExplainsAndStays(t *testing.T) {
+	fake := newIssueFake(t)
+	m := pressPR(openedPRs(t, fake), "p")
+	m.issues.run = fake.run
+	m = pressPR(m, "i")
+
+	m = pressPR(m, "]", "]", "2", "down", "enter")
+
+	if !m.issues.shown || m.pr.shown || !strings.Contains(m.notice, "#9 is merged") {
+		t.Fatalf("issues %v, prs %v, notice %q", m.issues.shown, m.pr.shown, m.notice)
 	}
 }

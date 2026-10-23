@@ -105,6 +105,7 @@ Sessions, events and the info box carry small icons for each CLI, agents, git br
 | `d` | Open or close the files screen for the selected session and its agents (all listed sessions on the All sessions row): files changed, most recent first, with `+added −removed` and the number of edits. `↑` `↓` pick a file, `tab` or `enter` moves to its diff, `pgup` `pgdown` scroll it, `esc` or `d` closes |
 | `t` | Open or close the stats screen (see below) |
 | `p` | Open or close the pull requests screen (see below). On a session that has a pull request, it opens on that one |
+| `i` | Open or close the issues screen (see Issues screen): the repository's GitHub Project grouped by Status column, with each issue's fields, comments and linked pull requests |
 | `space` | Sessions pane: fold or unfold the agents of the selected session. On an agent row it folds its parent and selects it. On the All sessions row it folds every session if any is unfolded, else unfolds every one. Your choice for a session wins over the automatic rule (see Agents) |
 | `?` | Open or close the key reference; `esc` also closes it |
 | `q` | Quit |
@@ -244,7 +245,7 @@ When a top-level session starts waiting for you while agent-trail runs (Claude C
 | Comments | The first 50 comments |
 | Linked | Pull requests that close the issue, and its sub-issues |
 
-`o` opens the issue, or the selected comment, pull request or sub-issue, in the browser. `R` refreshes, `/` filters, `z` zooms, `esc` goes back.
+`enter` on a closing pull request in the Linked tab jumps to it on the pull requests screen when it is open. `o` opens the issue, or the selected comment, pull request or sub-issue, in the browser. `R` refreshes, `/` filters, `z` zooms, `esc` goes back.
 
 ## Cost and billing
 

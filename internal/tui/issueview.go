@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	issueHint     = "↑↓ move  [ ] tab  enter detail  P project  o open  R refresh  / filter  z zoom  ? keys  i back"
+	issueHint     = "↑↓ move  [ ] tab  enter detail/PR  P project  o open  R refresh  / filter  z zoom  ? keys  i back"
 	noIssues      = "No issues"
 	issueFieldPad = 11
 )

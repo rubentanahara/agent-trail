@@ -75,6 +75,7 @@ var helpSections = []helpSection{
 		{"up down j k, pgup pgdown", "move in the focused pane"},
 		{"tab, 1 2, enter", "switch between the list and the detail"},
 		{"[ ]", "previous or next tab: Overview, Comments, Linked"},
+		{"enter", "Linked tab: jump to the pull request that closes the issue, when it is open"},
 		{"P", "next project, then the repository's open issues"},
 		{"R", "refresh now"},
 		{"o", "open the issue, or the selected comment, pull request or sub-issue, in the browser"},

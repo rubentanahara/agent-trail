@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"fmt"
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/rubentanahara/agent-trail/internal/gh"
@@ -63,8 +66,7 @@ func (m *model) issueNavigate(key string) tea.Cmd {
 	if m.issues.focus == prListFocus {
 		return m.issueListKey(key)
 	}
-	m.issueDetailKey(key)
-	return nil
+	return m.issueDetailKey(key)
 }
 
 func (m *model) issueListKey(key string) tea.Cmd {
@@ -107,7 +109,7 @@ func (m *model) moveIssue(delta int) tea.Cmd {
 	return m.fetchIssueDetail()
 }
 
-func (m *model) issueDetailKey(key string) {
+func (m *model) issueDetailKey(key string) tea.Cmd {
 	s := &m.issues
 	last := max(0, len(m.issueTabLines())-1)
 	cursor := &s.tabCursor[s.tab]
@@ -126,7 +128,41 @@ func (m *model) issueDetailKey(key string) {
 		*cursor = last
 	case "left", "h":
 		s.focus = prListFocus
+	case "enter":
+		return m.jumpToLinkedPR()
 	}
+	return nil
+}
+
+func (m *model) jumpToLinkedPR() tea.Cmd {
+	issue, ok := m.issues.selected()
+	lines := m.issueTabLines()
+	cursor := m.issues.tabCursor[m.issues.tab]
+	if !ok || m.issues.tab != issueLinkedTab || cursor >= len(lines) {
+		return nil
+	}
+	closedBy := m.issues.details[issue.Number].detail.ClosedBy
+	ref := lines[cursor].ref
+	if ref < 0 || ref >= len(closedBy) {
+		return nil
+	}
+	return m.showPullRequest(closedBy[ref])
+}
+
+func (m *model) showPullRequest(ref gh.IssueRef) tea.Cmd {
+	if !m.pr.loaded {
+		m.notice = "pull requests are still loading; try again in a moment"
+		return nil
+	}
+	if _, listed := m.pr.byNumber[ref.Number]; !listed {
+		m.notice = fmt.Sprintf("#%d is %s, not among the open pull requests; o opens it in the browser", ref.Number, strings.ToLower(ref.State))
+		return nil
+	}
+	m.closeIssues()
+	opened := m.openPRs()
+	m.pr.wantSession = ""
+	m.selectPR(ref.Number)
+	return tea.Batch(opened, m.fetchDetail(false), m.fetchTabData())
 }
 
 func (m *model) openIssueURL() tea.Cmd {
