@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/rubentanahara/agent-trail/internal/limits"
-	"github.com/rubentanahara/agent-trail/internal/trail"
 )
 
 func withClaudeLimits(m model, five float64) model {
@@ -54,11 +53,9 @@ func TestNothingShownWithoutClaudeUsage(t *testing.T) {
 
 func TestClaudeSessionLimitsLineStartsWithUsage(t *testing.T) {
 	m := withClaudeLimits(sized(newModel(nil, sampleBatch(), Context{}), 160, 30), 50)
-	m = press(m, "1", "down")
-	if m.sessions[m.sessionKeyAt(m.sessionCursor)].CLI != trail.Claude {
-		t.Skip("cursor not on the claude session")
-	}
-	if screen := ansi.Strip(m.render()); !strings.Contains(screen, "Limits   5h 50%") {
+	m = press(m, "1")
+	m.selectSession(m.rowOf("claude:a"))
+	if screen := ansi.Strip(m.render()); !strings.Contains(screen, "Limits    5h 50%") {
 		t.Fatalf("limits line lacks usage:\n%s", screen)
 	}
 }
