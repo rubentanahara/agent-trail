@@ -149,6 +149,9 @@ func (m model) render() string {
 	if m.filesScreen.shown {
 		return m.renderFiles()
 	}
+	if m.pr.shown {
+		return m.renderPRScreen()
+	}
 	g := m.layout()
 	right := stack(
 		paneBox{m.eventsTitle(), m.eventRows(g.rightW-2, g.eventsH-borderAndTitle-1), g.rightW, g.eventsH, m.borderFor(eventsPane)}.render(),
@@ -264,7 +267,11 @@ func scopeState(session trail.Session) string {
 }
 
 func age(at time.Time) string {
-	elapsed := time.Since(at)
+	return ageAt(at, time.Now())
+}
+
+func ageAt(at, now time.Time) string {
+	elapsed := now.Sub(at)
 	switch {
 	case elapsed < time.Minute:
 		return fmt.Sprintf("%ds", max(0, int(elapsed.Seconds())))
@@ -334,7 +341,7 @@ func (m model) sessionLabelRow(row int, key string) string {
 	session := m.sessions[key]
 	name := m.sessionQuery.highlight(sessionLabel(session), matchStyle)
 	if !m.isChild(session) {
-		return marker(key == m.activeSession) + faintStyle.Render(m.foldMark(key)) + glyphStyle(session).Render(stateGlyph(session)) + cliStyle(session.CLI).Render(m.cliIcon(session.CLI)) + name + m.projectHint(session) + m.branchHint(session)
+		return marker(key == m.activeSession) + faintStyle.Render(m.foldMark(key)) + glyphStyle(session).Render(stateGlyph(session)) + cliStyle(session.CLI).Render(m.cliIcon(session.CLI)) + name + m.projectHint(session) + m.branchHint(session) + m.prBadge(session)
 	}
 	return marker(key == m.activeSession) + faintStyle.Render(m.branchGlyph(row)) + glyphStyle(session).Render(stateGlyph(session)) + cliStyle(session.CLI).Render(m.icon(agentIcon)) + name + faintStyle.Render(" · "+session.Agent)
 }

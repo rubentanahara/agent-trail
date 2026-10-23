@@ -57,8 +57,10 @@ func trimTrailingBlanks(line string) string {
 }
 
 func (m model) markdown(text string) string {
-	width := m.detail.Width()
-	cache := m.summary.rendered
+	return m.markdownIn(m.summary.rendered, text, m.detail.Width())
+}
+
+func (m model) markdownIn(cache *markdownCache, text string, width int) string {
 	if cache.valid && cache.text == text && cache.width == width {
 		return cache.out
 	}

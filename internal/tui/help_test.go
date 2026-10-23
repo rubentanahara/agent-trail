@@ -65,12 +65,13 @@ func TestNarrowKeyReferenceScrolls(t *testing.T) {
 	if strings.Contains(ansi.Strip(m.render()), "Files screen") {
 		t.Fatal("expected Files screen below the fold at 60 columns")
 	}
-	for range 3 {
+	for range 6 {
 		m = press(m, "pgdown")
+		if strings.Contains(ansi.Strip(m.render()), "Files screen") {
+			return
+		}
 	}
-	if !strings.Contains(ansi.Strip(m.render()), "Files screen") {
-		t.Fatalf("scrolling did not reach Files screen:\n%s", ansi.Strip(m.render()))
-	}
+	t.Fatalf("scrolling did not reach Files screen:\n%s", ansi.Strip(m.render()))
 }
 
 func TestFooterStartsWithKeysHintInEveryPane(t *testing.T) {

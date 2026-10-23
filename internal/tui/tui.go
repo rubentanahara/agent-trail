@@ -32,7 +32,7 @@ const (
 	paneCount
 )
 
-type pollMsg struct{}
+type pollMsg struct{ at time.Time }
 
 type batchMsg struct{ batch trail.Batch }
 
@@ -114,6 +114,9 @@ type model struct {
 	notice        string
 	waitingSince  map[string]time.Time
 
+	now time.Time
+	pr  prScreen
+
 	statsScreen statsScreen
 	filesScreen filesScreen
 	help        helpScreen
@@ -163,6 +166,7 @@ func newModel(follower *trail.Trail, history trail.Batch, context Context) model
 		search:          search,
 		detail:          detail,
 		summary:         summaryState{rendered: &markdownCache{}},
+		pr:              newPRScreen(context.Repo),
 		detailRequested: noEvent,
 		detailShown:     noEvent,
 	}
@@ -172,11 +176,11 @@ func newModel(follower *trail.Trail, history trail.Batch, context Context) model
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(tick(), m.requestDetail())
+	return tea.Batch(tick(), m.requestDetail(), m.startPRs())
 }
 
 func tick() tea.Cmd {
-	return tea.Tick(pollInterval, func(time.Time) tea.Msg { return pollMsg{} })
+	return tea.Tick(pollInterval, func(at time.Time) tea.Msg { return pollMsg{at: at} })
 }
 
 func (m model) poll() tea.Cmd {
@@ -217,7 +221,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshDetail()
 		m.resizeFiles()
 	case pollMsg:
-		return m, tea.Batch(m.poll(), m.statsScreen.poll(m.context.Everywhere), pollLimits(m.context.Home))
+		m.now = msg.at
+		return m, tea.Batch(m.poll(), m.statsScreen.poll(m.context.Everywhere), pollLimits(m.context.Home), m.pollPRs())
+	case prMessage:
+		cmds = append(cmds, m.absorbPR(msg))
 	case batchMsg:
 		cmds = append(cmds, m.absorbPolled(msg.batch), tick())
 	case limitsMsg:
@@ -247,7 +254,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.click(msg.Mouse())
 	case tea.KeyPressMsg:
 		before := m.layout()
+		armed := m.pr.quitArmed
+		m.pr.quitArmed = false
 		cmd, quit := m.key(msg)
+		if quit && m.writeBlocksQuit(armed) {
+			m.armQuit()
+			quit = false
+		}
 		if quit {
 			return m, tea.Quit
 		}
@@ -486,6 +499,8 @@ func (m *model) key(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return m.statsKey(msg.String())
 	case m.filesScreen.shown:
 		return m.filesKey(msg.String())
+	case m.pr.shown:
+		return m.prKey(msg)
 	}
 	if target, ok := focusKeys[msg.String()]; ok {
 		m.focus = target
@@ -500,6 +515,8 @@ func (m *model) key(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return m.statsScreen.open(m.context), false
 	case "d":
 		return m.openFiles(), false
+	case "p":
+		return m.openPRs(), false
 	case "z":
 		m.zoomed = !m.zoomed
 	case "o":
