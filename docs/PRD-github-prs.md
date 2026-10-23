@@ -11,7 +11,7 @@
 | Approvers/Sign-Off | |
 
 **PM Epic:** n/a (personal project)
-**Status of PRD:** Backlog
+**Status of PRD:** Implemented on main, unreleased
 
 ---
 
@@ -433,7 +433,7 @@ Every step adds a test that fails before it and passes after it. Every step ends
 1. Branch matching misses a Codex or Copilot session that switched branch and closed before sampling saw it.
 2. Two PRs from one head branch into different bases share a badge (most recent plus `+N`).
 3. The GraphQL point cost of the list with nested rollups is unmeasured.
-4. The scope a real re-run needs, and whether `autoMergeAllowed` is readable from `gh repo view`, are unconfirmed until Wave 2.
+4. A real re-run succeeded with a classic token holding `repo` and `workflow`; the minimum scope was not tested. `gh repo view` does not expose auto-merge, so merge settings come from `gh api repos/{owner}/{repo}` (`allow_auto_merge`), cached for an hour. Those fields appear only for users with push access.
 5. Wave 3 is the largest piece. If it slips, Waves 1 and 2 still ship alone.
 6. Release dates are not set.
 7. Keymap sign-off against the in-app key reference is pending, and `NO_COLOR` handling must be verified when implementing.

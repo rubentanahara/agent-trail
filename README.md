@@ -104,6 +104,7 @@ Sessions, events and the info box carry small icons for each CLI, agents, git br
 | `x` | Sessions pane: delete the selected session and its transcript files, after you confirm with `y`. A session is refused while it is running, while a Codex or Copilot turn is open, or if its transcript changed in the last 2 minutes. Agents are deleted with their parent |
 | `d` | Open or close the files screen for the selected session and its agents (all listed sessions on the All sessions row): files changed, most recent first, with `+added −removed` and the number of edits. `↑` `↓` pick a file, `tab` or `enter` moves to its diff, `pgup` `pgdown` scroll it, `esc` or `d` closes |
 | `t` | Open or close the stats screen (see below) |
+| `p` | Open or close the pull requests screen (see below). On a session that has a pull request, it opens on that one |
 | `space` | Sessions pane: fold or unfold the agents of the selected session. On an agent row it folds its parent and selects it. On the All sessions row it folds every session if any is unfolded, else unfolds every one. Your choice for a session wins over the automatic rule (see Agents) |
 | `?` | Open or close the key reference; `esc` also closes it |
 | `q` | Quit |
@@ -186,6 +187,29 @@ Output-style tools such as caveman and ponytail record no savings: there is no r
 **Sessions.** One row per session that had activity in the replay window, the most recently active first. Each row shows its state, the time since its last event, and its cost including its agents. The cost is in dollars only, `—` when the model has no price, and red when the session is billed to an API key. The name is the session title the CLI generated or you set, otherwise the first prompt. When following every repository, the row also names the folder the session ran in.
 
 **Files changed.** `d` lists the files a session edited, with lines added and removed and every change as a diff in time order. The screen updates while it is open as new edits arrive. Claude Code: the exact patch it records for each Edit, Write and MultiEdit result, plus the diff of files a Bash command such as `sed -i` modified. Codex: file changes, counted from the content of a new file or from the unified diff Codex records; a change with no diff is listed as `+? −?`. Copilot CLI: the diff stored with each edit and create result.
+
+**Pull requests.** `p` opens the GitHub pull requests of the current repository next to the sessions that wrote them. It needs the [GitHub CLI](https://cli.github.com) installed and signed in (`gh auth login`); agent-trail never reads or stores a token and asks `gh` for everything. It is unavailable when following every repository.
+
+The list has *Needs my review*, *My PRs* and *All open* (up to 100). The detail pane has five tabs, switched with `[` and `]`: Overview, Checks, Comments, Diff and Sessions. A pull request matches a session when its head branch is in the set of branches the session has been on, and the pull request is not from a fork. Session rows show the matching `#N`, and `enter` on the Sessions tab jumps to the session.
+
+| Key | Action |
+|---|---|
+| `tab`, `1` `2`, `enter` | Switch between the list and the detail |
+| `[` `]` | Previous or next tab |
+| `R` | Refresh now. The screen also refreshes every 30 seconds while it is open |
+| `o` | Open the pull request, or the selected check or comment, in the browser |
+| `r` | Comments tab: reply to the thread, or add a comment, in `$VISUAL`, `$EDITOR` or `vi` |
+| `e` | Edit your comment, or your pull request title and body |
+| `v` | Resolve or unresolve the selected thread |
+| `M` | Merge: `s` `m` `r` pick an allowed method, `d` toggles deleting the remote branch, `a` auto-merge when checks are pending, `y` confirms |
+| `X` | Close the pull request, after `y` |
+| `A` | Review: `a` approve, `r` request changes, `c` comment, then your editor, then `y` |
+| `L` | Checks tab: read the log of a GitHub Actions check (`a` failed steps or full log, last 5000 lines; `/` search, `n` `N` next match) |
+| `E` | Checks tab: re-run a GitHub Actions check, after `y` (`a` for all jobs) |
+| `c` | Diff tab: comment on an added or unchanged line. Comments join your pending review |
+| `S` `D` | Submit or discard your pending review (`Pending (N)` shows in the header) |
+
+Every write asks for `y` or opens your editor first, is never retried, and runs one at a time; a failed write keeps your draft file. Merge runs from the temporary directory with `--repo`, so deleting the branch never touches your local worktrees. Each poll costs at most three `gh` calls.
 
 **Agents.** Each Claude Code subagent (a Task or Agent call, foreground or background) gets its own row under the session that started it, named by the description it was given, with its agent type. `●` means it is still running and `✓` that it finished, read from the `.meta.json` Claude Code writes beside each agent transcript. Agents are folded automatically unless their session is running or selected; `space` folds or unfolds a session's agents and overrides that for the session. `▸` marks a folded session and `▾` an unfolded one. Selecting the session shows its events and every agent's; selecting an agent shows only that agent's. Codex and Copilot CLI record their subagents inside the session transcript, so they stay in the parent row and the `Subagents` field.
 
