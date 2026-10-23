@@ -21,6 +21,10 @@ It reads the transcripts each CLI already writes to disk. Nothing has to be conf
 
 Claude Code is orange, Codex green and Copilot purple. Your own prompts are bold cyan.
 
+### Icons
+
+Sessions, events and the info box carry small icons for each CLI, agents, git branches and folders. They need a Nerd Font 3.5 or newer. With an older font, or a plain one, run `agent-trail --icons=false`.
+
 ## Install
 
 Download a binary for macOS or Linux from the [releases page](https://github.com/rubentanahara/agent-trail/releases), extract it and put `agent-trail` on your `PATH`.
@@ -44,6 +48,7 @@ agent-trail --global     # every repository, even inside one
 agent-trail --once | grep FAILED   # plain text, no TUI
 agent-trail --prices     # the price used for every model in the history
 agent-trail --offline    # do not download the price list
+agent-trail --icons=false   # no Nerd Font icons
 agent-trail --version
 ```
 

@@ -81,13 +81,13 @@ func (m model) infoRows() []string {
 	rows := []string{
 		field("Name", sessionLabel(session)),
 		field("State", stateLine(session)),
-		field("CLI", string(session.CLI)+optional(" · agent ", session.Agent)),
-		field("Parent", m.parentLabel(session)),
-		field("Agents", m.agentsLine(session.Key)),
+		field("CLI", m.cliIcon(session.CLI)+string(session.CLI)+optional(" · agent ", session.Agent)),
+		field("Parent", m.iconBefore(agentIcon, m.parentLabel(session))),
+		field("Agents", m.iconBefore(agentIcon, m.agentsLine(session.Key))),
 		field("Subagents", strings.Join(session.Subagents, ", ")),
-		field("Folder", session.Cwd),
+		field("Folder", m.iconBefore(folderIcon, session.Cwd)),
 		field("Model", session.Model),
-		field("Branch", session.Branch),
+		field("Branch", m.iconBefore(gitIcon, session.Branch)),
 		field("Mode", session.Permission),
 		field("Billing", billingLabel(session)),
 		field("Active", activeSpan(session)),
@@ -137,7 +137,7 @@ func (m model) totalRows() []string {
 	return nonEmpty([]string{
 		field("Repo", cmp.Or(m.context.Repo, everyRepositoryLabel)),
 		field("Running", fmt.Sprintf("%d sessions", m.runningCount())),
-		field("Sessions", fmt.Sprintf("claude %d · codex %d · copilot %d", totals.perCLI[trail.Claude], totals.perCLI[trail.Codex], totals.perCLI[trail.Copilot])),
+		field("Sessions", m.cliCounts(totals)),
 		field("Tokens", tokenLine(totals.tokens)),
 		field("API billed", nonZeroDollars(totals.apiCost)),
 		field("Subscription", nonZeroDollars(totals.equivalentCost)+optional("", ifPositive(totals.equivalentCost, " API-equivalent"))),
@@ -146,6 +146,11 @@ func (m model) totalRows() []string {
 		field("Prices", m.pricesLine()),
 		field("Legend", strings.TrimSpace(runningGlyph+"running "+waitingGlyph+waitingText+" "+closedGlyph+"closed "+unknownGlyph+"not recorded")),
 	})
+}
+
+func (m model) cliCounts(totals sessionTotals) string {
+	return fmt.Sprintf("%sclaude %d · %scodex %d · %scopilot %d",
+		m.cliIcon(trail.Claude), totals.perCLI[trail.Claude], m.cliIcon(trail.Codex), totals.perCLI[trail.Codex], m.cliIcon(trail.Copilot), totals.perCLI[trail.Copilot])
 }
 
 func (m model) pricesLine() string {

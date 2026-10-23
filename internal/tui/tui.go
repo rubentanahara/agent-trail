@@ -60,6 +60,7 @@ type Context struct {
 	PriceWarning string
 	Everywhere   *trail.Trail
 	StatsSince   time.Time
+	Icons        bool
 }
 
 type model struct {
@@ -247,7 +248,7 @@ func (m *model) absorb(batch trail.Batch) {
 	}
 	for _, event := range batch.Events {
 		m.events = append(m.events, event)
-		m.haystack = append(m.haystack, strings.ToLower(event.Who()+" "+string(event.Kind)+" "+event.Summary))
+		m.haystack = append(m.haystack, strings.ToLower(event.Who()+" "+m.agentName(event)+" "+string(event.Kind)+" "+event.Summary))
 		if m.includes(len(m.events) - 1) {
 			m.visible = append(m.visible, len(m.events)-1)
 		}

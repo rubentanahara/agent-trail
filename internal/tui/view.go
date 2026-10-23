@@ -24,7 +24,7 @@ const (
 	minBoxHeight         = 3
 	infoPaneRows         = 15
 	hideLeftBelow        = 70
-	whoWidth             = 16
+	whoWidth             = 20
 	kindWidth            = 10
 	timeLayout           = "01-02 15:04:05"
 	shortIDLength        = 8
@@ -272,21 +272,21 @@ func (m model) eventRows(width, rows int) []string {
 		event := ledger.withCost(m.events[m.visible[row]])
 		stamp := event.Time.Local().Format(timeLayout) + " "
 		if row == m.eventCursor {
-			body := selectedStyle.Render(fit(plainEventBody(event), width-len(stamp)))
+			body := selectedStyle.Render(fit(m.plainEventBody(event), width-len(stamp)))
 			out = append(out, selectedStyle.Render(stamp)+m.filter.highlight(body, matchOnSelect))
 			continue
 		}
-		out = append(out, faintStyle.Render(stamp)+m.filter.highlight(styledEventBody(event), matchStyle))
+		out = append(out, faintStyle.Render(stamp)+m.filter.highlight(m.styledEventBody(event), matchStyle))
 	}
 	return out
 }
 
-func plainEventBody(event trail.Event) string {
-	return fmt.Sprintf("%s %s %s", fit(event.Who(), whoWidth), fit(string(event.Kind), kindWidth), event.Summary)
+func (m model) plainEventBody(event trail.Event) string {
+	return fmt.Sprintf("%s%s %s %s", m.eventWhoIcon(event), fit(m.eventWho(event), whoWidth), fit(string(event.Kind), kindWidth), event.Summary)
 }
 
-func styledEventBody(event trail.Event) string {
-	who := cliStyle(event.CLI).Render(fit(event.Who(), whoWidth))
+func (m model) styledEventBody(event trail.Event) string {
+	who := cliStyle(event.CLI).Render(m.eventWhoIcon(event) + fit(m.eventWho(event), whoWidth))
 	kind := fit(string(event.Kind), kindWidth)
 	summary := event.Summary
 	switch {
@@ -323,9 +323,9 @@ func (m model) sessionLabelRow(row int, key string) string {
 	session := m.sessions[key]
 	name := m.sessionQuery.highlight(sessionLabel(session), matchStyle)
 	if !m.isChild(session) {
-		return marker(key == m.activeSession) + glyphStyle(session).Render(stateGlyph(session)) + name + m.projectHint(session)
+		return marker(key == m.activeSession) + glyphStyle(session).Render(stateGlyph(session)) + cliStyle(session.CLI).Render(m.cliIcon(session.CLI)) + name + m.projectHint(session)
 	}
-	return marker(key == m.activeSession) + faintStyle.Render(m.branchGlyph(row)) + glyphStyle(session).Render(stateGlyph(session)) + name + faintStyle.Render(" · "+session.Agent)
+	return marker(key == m.activeSession) + faintStyle.Render(m.branchGlyph(row)) + glyphStyle(session).Render(stateGlyph(session)) + cliStyle(session.CLI).Render(m.icon(agentIcon)) + name + faintStyle.Render(" · "+session.Agent)
 }
 
 func (m model) branchGlyph(row int) string {
