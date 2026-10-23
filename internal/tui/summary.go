@@ -43,12 +43,14 @@ type cachedSummary struct {
 }
 
 type summaryState struct {
-	shown   bool
-	key     string
-	cache   map[string]cachedSummary
-	failed  map[string]error
-	pending map[string]bool
-	run     summaryRunner
+	shown    bool
+	key      string
+	cache    map[string]cachedSummary
+	failed   map[string]error
+	pending  map[string]bool
+	run      summaryRunner
+	render   markdownRenderer
+	rendered *markdownCache
 }
 
 type summaryMsg struct {
@@ -144,7 +146,7 @@ func (m model) summaryContent() string {
 	if s.pending[s.key] {
 		return faintStyle.Render(summaryPending)
 	}
-	return s.cache[s.key].result.Text
+	return m.matchingLines(m.markdown(s.cache[s.key].result.Text))
 }
 
 func summaryArgs() []string {

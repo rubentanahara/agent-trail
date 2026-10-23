@@ -159,6 +159,7 @@ func newModel(follower *trail.Trail, history trail.Batch, context Context) model
 		focus:           eventsPane,
 		search:          search,
 		detail:          detail,
+		summary:         summaryState{rendered: &markdownCache{}},
 		detailRequested: noEvent,
 		detailShown:     noEvent,
 	}

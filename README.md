@@ -109,7 +109,7 @@ Examples: `'codex 'tool`, `'failed`, `'claude/web-fetch`, `!usage`. In the sessi
 
 ### Summary
 
-`y` with a session selected asks Claude Haiku for a summary of that session's conversation so far (Goal, Done, Open, Next) and shows it in the detail pane; `y` again returns to the event detail. Select a session first: with all sessions selected it only says so.
+`y` with a session selected asks Claude Haiku for a summary of that session's conversation so far (Goal, Done, Open, Next) and shows it in the detail pane, rendered as Markdown; `y` again returns to the event detail. Select a session first: with all sessions selected it only says so.
 
 - **What is sent:** the prompts you typed and the assistant's replies in full, from the session and its agents, plus one line per tool call. Tool results, thinking and token usage are not sent. At most about 400 000 characters go out, the most recent part; when the start is cut the summary says so. This includes Codex and Copilot CLI sessions.
 - **To whom:** Anthropic, through your own `claude` CLI and its login (your subscription), run as `claude -p --model haiku` with no tools, no session saved and your hooks and plugins switched off for that call. agent-trail has no API key and sends nothing itself.
