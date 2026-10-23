@@ -71,6 +71,8 @@ type model struct {
 
 	events   []trail.Event
 	haystack []string
+	revision int
+	ledger   *ledgerCache
 	sessions map[string]trail.Session
 	order    []string
 	children map[string][]string
@@ -151,6 +153,7 @@ func newModel(follower *trail.Trail, history trail.Batch, context Context) model
 		follower:        follower,
 		context:         context,
 		sessions:        map[string]trail.Session{},
+		ledger:          &ledgerCache{},
 		folded:          map[string]bool{},
 		follow:          true,
 		showUsage:       true,
@@ -259,6 +262,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) absorb(batch trail.Batch) {
+	if changesTurns(m.sessions, batch) {
+		m.revision++
+	}
 	if len(batch.Reset) > 0 {
 		m.dropEvents(func(session string) bool { return slices.Contains(batch.Reset, session) })
 	}
@@ -278,6 +284,19 @@ func (m *model) absorb(batch trail.Batch) {
 	if m.follow {
 		m.jumpToLatest()
 	}
+}
+
+func changesTurns(known map[string]trail.Session, batch trail.Batch) bool {
+	if len(batch.Events) > 0 || len(batch.Reset) > 0 {
+		return true
+	}
+	for _, session := range batch.Sessions {
+		previous, seen := known[session.Key]
+		if !seen || previous.Parent != session.Parent {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *model) jumpToLatest() {
@@ -800,6 +819,7 @@ func (m *model) finishDelete(msg deletedMsg) {
 }
 
 func (m *model) forgetSession(key string) {
+	m.revision++
 	family := m.family(key)
 	for _, member := range family {
 		delete(m.sessions, member)
@@ -812,6 +832,7 @@ func (m *model) forgetSession(key string) {
 }
 
 func (m *model) dropEvents(drop func(session string) bool) {
+	m.revision++
 	previous, selected, kept := m.selectedEvent(), noEvent, 0
 	for i, event := range m.events {
 		if drop(event.Session) {

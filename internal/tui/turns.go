@@ -3,6 +3,9 @@ package tui
 import (
 	"cmp"
 	"fmt"
+	"slices"
+	"sort"
+	"time"
 
 	"github.com/rubentanahara/agent-trail/internal/trail"
 )
@@ -12,9 +15,17 @@ const partialCostMark = "+"
 type turn struct {
 	session string
 	summary string
+	at      time.Time
 	cost    float64
 	priced  bool
 	partial bool
+}
+
+type ledgerCache struct {
+	ledger   turnLedger
+	revision int
+	built    bool
+	builds   int
 }
 
 type turnLedger struct {
@@ -55,22 +66,52 @@ func (m model) turnOwners() map[string]string {
 }
 
 func (m model) turns() turnLedger {
+	cache := m.ledger
+	if cache == nil {
+		return m.buildTurns()
+	}
+	if !cache.built || cache.revision != m.revision {
+		cache.ledger, cache.revision, cache.built = m.buildTurns(), m.revision, true
+		cache.builds++
+	}
+	return cache.ledger
+}
+
+func (m model) buildTurns() turnLedger {
 	ledger := turnLedger{bySource: map[trail.Source]*turn{}}
-	current := map[string]*turn{}
 	owners := m.turnOwners()
+	byOwner := map[string][]*turn{}
 	for _, event := range m.events {
 		owner := cmp.Or(owners[event.Session], event.Session)
-		switch {
-		case isPrompt(event) && owner == event.Session:
-			started := &turn{session: owner, summary: event.Summary}
-			current[owner] = started
-			ledger.bySource[event.Source] = started
-			ledger.ordered = append(ledger.ordered, started)
-		case event.Usage != nil && current[owner] != nil:
-			current[owner].add(event.Usage)
+		if !isPrompt(event) || owner != event.Session {
+			continue
+		}
+		started := &turn{session: owner, summary: event.Summary, at: event.Time}
+		byOwner[owner] = append(byOwner[owner], started)
+		ledger.bySource[event.Source] = started
+		ledger.ordered = append(ledger.ordered, started)
+	}
+	for _, turns := range byOwner {
+		slices.SortStableFunc(turns, func(a, b *turn) int { return a.at.Compare(b.at) })
+	}
+	for _, event := range m.events {
+		if event.Usage == nil {
+			continue
+		}
+		owner := cmp.Or(owners[event.Session], event.Session)
+		if charged := latestTurnAt(byOwner[owner], event.Time); charged != nil {
+			charged.add(event.Usage)
 		}
 	}
 	return ledger
+}
+
+func latestTurnAt(turns []*turn, at time.Time) *turn {
+	after := sort.Search(len(turns), func(i int) bool { return turns[i].at.After(at) })
+	if after == 0 {
+		return nil
+	}
+	return turns[after-1]
 }
 
 func (l turnLedger) withCost(event trail.Event) trail.Event {

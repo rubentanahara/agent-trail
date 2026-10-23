@@ -52,6 +52,30 @@ func (m *model) openFiles() tea.Cmd {
 	return m.pickFile(0)
 }
 
+func (m *model) refreshFiles(batch trail.Batch) tea.Cmd {
+	if !m.filesScreen.shown || !m.addsFileChanges(batch) {
+		return nil
+	}
+	screen := &m.filesScreen
+	var selected string
+	if len(screen.files) > 0 {
+		selected = screen.files[screen.cursor].path
+	}
+	screen.files = m.changedFiles()
+	row := slices.IndexFunc(screen.files, func(file changedFile) bool { return file.path == selected })
+	if row < 0 {
+		return m.pickFile(0)
+	}
+	screen.cursor = row
+	return loadFilePatches(screen.files[row])
+}
+
+func (m model) addsFileChanges(batch trail.Batch) bool {
+	return slices.ContainsFunc(batch.Events, func(event trail.Event) bool {
+		return len(event.Changes) > 0 && m.inFilesScope(event)
+	})
+}
+
 func (m *model) resizeFiles() {
 	if !m.filesScreen.shown {
 		return
@@ -129,6 +153,7 @@ func (m *model) pickFile(row int) tea.Cmd {
 	screen.cursor = max(0, min(row, len(screen.files)-1))
 	screen.loading, screen.err = true, nil
 	screen.diff.SetContent("")
+	screen.diff.GotoTop()
 	return loadFilePatches(screen.files[screen.cursor])
 }
 
@@ -163,7 +188,6 @@ func (m *model) showFilePatches(msg filePatchesMsg) {
 	}
 	screen.loading, screen.err = false, msg.err
 	screen.diff.SetContent(renderBlocks(msg.blocks))
-	screen.diff.GotoTop()
 }
 
 func (m *model) filesKey(key string) (tea.Cmd, bool) {

@@ -25,7 +25,7 @@ const (
 func (m *model) absorbPolled(batch trail.Batch) tea.Cmd {
 	handedBack := m.trackWaiting(batch.Sessions)
 	m.absorb(batch)
-	return m.alert(handedBack)
+	return tea.Batch(m.alert(handedBack), m.refreshFiles(batch))
 }
 
 func (m *model) seedWaiting(sessions []trail.Session) {
